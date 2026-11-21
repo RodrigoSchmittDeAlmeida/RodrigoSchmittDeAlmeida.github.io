@@ -1,22 +1,22 @@
 :root {
   --bg-void: oklch(14% 0.006 250);
-  --surface-hud: oklch(17% 0.008 250 / 0.84);
+  --surface-hud: oklch(15% 0.008 250 / 0.88);
   --surface-solid: oklch(17% 0.008 250);
   --surface-elevated: oklch(21% 0.009 250);
   --surface-recessed: oklch(13% 0.006 250);
   --surface-hover: oklch(24% 0.01 250);
 
-  --border-subtle: oklch(100% 0 0 / 0.10);
-  --border-strong: oklch(100% 0 0 / 0.20);
+  --border-subtle: oklch(100% 0 0 / 0.14);
+  --border-strong: oklch(100% 0 0 / 0.24);
 
   --text-primary: oklch(94% 0.004 250);
   --text-secondary: oklch(78% 0.007 250);
   --text-muted: oklch(66% 0.008 250);
 
-  --accent: oklch(72% 0.12 58);
-  --accent-surface: oklch(72% 0.12 58 / 0.14);
-  --accent-border: oklch(72% 0.12 58 / 0.50);
-  --accent-ink: oklch(15% 0.015 58);
+  --accent: oklch(94% 0.01 240);
+  --accent-surface: oklch(100% 0 0 / 0.14);
+  --accent-border: oklch(94% 0.01 240 / 0.48);
+  --accent-ink: oklch(14% 0.008 250);
 
   --status-ok: oklch(72% 0.10 152);
   --status-danger: oklch(67% 0.14 25);
@@ -35,7 +35,7 @@
 }
 
 ::selection {
-  background: oklch(72% 0.12 58 / 0.32);
+  background: oklch(94% 0.01 240 / 0.28);
   color: var(--text-primary);
 }
 
@@ -146,7 +146,7 @@ body,
 .station-btn {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   padding: 5px 10px;
   border-radius: 999px;
   border: 1px solid transparent;
@@ -158,6 +158,14 @@ body,
   cursor: pointer;
   transition: background-color 0.16s var(--ease-out-expo), color 0.16s var(--ease-out-expo),
     border-color 0.16s var(--ease-out-expo);
+}
+
+.station-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 1px oklch(100% 0 0 / 0.20);
 }
 
 .station-btn:hover {
@@ -504,7 +512,16 @@ body,
   height: 100%;
   width: 12%;
   border-radius: 999px;
-  background: var(--accent);
+  background: linear-gradient(
+    90deg,
+    oklch(96% 0.006 240) 0%,
+    oklch(76% 0.012 245) 78%,
+    oklch(68% 0.14 22) 82%,
+    oklch(62% 0.16 20) 100%
+  );
+  background-repeat: no-repeat;
+  background-position: left center;
+  background-size: 833.3% 100%;
   transition: width 0.08s linear;
 }
 

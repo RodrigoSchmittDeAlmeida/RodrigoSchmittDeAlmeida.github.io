@@ -292,6 +292,7 @@ export class HudController {
             data-project-id="${escapeHtml(p.id)}"
             title="Dirigir até ${escapeHtml(p.title)} (Tecla ${p.index})"
           >
+            <span class="station-dot" style="background-color: ${escapeHtml(p.color)}" aria-hidden="true"></span>
             <span>${escapeHtml(p.shortName)}</span>
           </button>
         `
@@ -488,8 +489,10 @@ export class HudController {
 
     this.minimapCanvas.addEventListener('click', (ev) => {
       const rect = this.minimapCanvas.getBoundingClientRect();
-      const clickX = ev.clientX - rect.left;
-      const clickY = ev.clientY - rect.top;
+      const scaleX = rect.width > 0 ? this.minimapCanvas.width / rect.width : 1;
+      const scaleY = rect.height > 0 ? this.minimapCanvas.height / rect.height : 1;
+      const clickX = (ev.clientX - rect.left) * scaleX;
+      const clickY = (ev.clientY - rect.top) * scaleY;
 
       let closest: PortfolioProject | null = null;
       let bestDist = 18;
@@ -546,7 +549,9 @@ export class HudController {
     const clampedRpm = Math.max(850, Math.min(6800, Math.round(t.rpm)));
     this.rpmReadoutEl.textContent = `${clampedRpm} RPM`;
     const rpmPct = ((clampedRpm - 850) / (6800 - 850)) * 100;
-    this.rpmBarEl.style.width = `${Math.max(5, Math.min(100, rpmPct)).toFixed(1)}%`;
+    const clampedPct = Math.max(5, Math.min(100, rpmPct));
+    this.rpmBarEl.style.width = `${clampedPct.toFixed(1)}%`;
+    this.rpmBarEl.style.backgroundSize = `${(10000 / clampedPct).toFixed(1)}% 100%`;
 
     this.coordsEl.textContent = `X ${t.posX.toFixed(1)}m • Z ${t.posZ.toFixed(1)}m • Rumo ${Math.round(t.headingDeg)}°`;
 
@@ -614,11 +619,13 @@ export class HudController {
   private worldToMinimap(wx: number, wz: number): { x: number; y: number } {
     const w = this.minimapCanvas.width;
     const h = this.minimapCanvas.height;
-    const nx = (wx + 28) / 56;
-    const ny = (wz - 16) / -242; // bottom (+16) -> top (-226)
+    const padX = 8;
+    const padY = 8;
+    const nx = (wx + 28) / 56; // X in [-28, 28]
+    const ny = (22 - wz) / 254; // Z in [-232, 22]: bottom (+22) -> top (-232)
     return {
-      x: Math.max(8, Math.min(w - 8, nx * w)),
-      y: Math.max(8, Math.min(h - 8, h - ny * (h - 16) - 8)),
+      x: Math.max(padX, Math.min(w - padX, padX + nx * (w - padX * 2))),
+      y: Math.max(padY, Math.min(h - padY, h - padY - ny * (h - padY * 2))),
     };
   }
 
@@ -645,51 +652,91 @@ export class HudController {
       ctx.stroke();
     }
 
-    // Main track spine
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.14)';
+    // Discreet stone-gray bay connectors from X=0 to each station
+    ctx.strokeStyle = 'rgba(148, 158, 170, 0.34)';
     ctx.lineWidth = 3;
-    ctx.beginPath();
-    const startPt = this.worldToMinimap(0, 4);
+    for (const project of this.projects) {
+      if (Math.abs(project.worldPos.x) > 0.5) {
+        const spinePt = this.worldToMinimap(0, project.worldPos.z);
+        const bayPt = this.worldToMinimap(project.worldPos.x, project.worldPos.z);
+        ctx.beginPath();
+        ctx.moveTo(spinePt.x, spinePt.y);
+        ctx.lineTo(bayPt.x, bayPt.y);
+        ctx.stroke();
+      }
+    }
+
+    // Central stone-gray avenue along X = 0
+    const startPt = this.worldToMinimap(0, 18);
     const endPt = this.worldToMinimap(0, -214);
+    ctx.strokeStyle = 'rgba(148, 158, 170, 0.44)';
+    ctx.lineWidth = 6;
+    ctx.lineCap = 'butt';
+    ctx.beginPath();
     ctx.moveTo(startPt.x, startPt.y);
     ctx.lineTo(endPt.x, endPt.y);
     ctx.stroke();
 
-    // 7 station markers
+    // Subtle center road line
+    ctx.strokeStyle = 'rgba(226, 232, 240, 0.22)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(startPt.x, startPt.y);
+    ctx.lineTo(endPt.x, endPt.y);
+    ctx.stroke();
+
+    // 7 uniquely colored station markers + index labels
+    ctx.font = '600 9px "IBM Plex Mono", monospace';
+    ctx.textBaseline = 'middle';
     for (const project of this.projects) {
       const pt = this.worldToMinimap(project.worldPos.x, project.worldPos.z);
       const isFocused =
         t.nearestProjectId === project.id ||
         (t.autopilotMode !== 'manual' && t.autopilotTargetId === project.id);
-
-      ctx.beginPath();
-      ctx.arc(pt.x, pt.y, isFocused ? 4.5 : 3.2, 0, Math.PI * 2);
-      ctx.fillStyle = isFocused ? '#d98f4e' : '#8b909a';
-      ctx.fill();
+      const radius = isFocused ? 5.2 : 4.2;
 
       if (isFocused) {
-        ctx.strokeStyle = '#f2f3f5';
-        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(pt.x, pt.y, radius + 2.2, 0, Math.PI * 2);
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.4;
         ctx.stroke();
       }
-    }
 
-    // Gol G5 directional triangle
+      ctx.beginPath();
+      ctx.arc(pt.x, pt.y, radius, 0, Math.PI * 2);
+      ctx.fillStyle = project.color;
+      ctx.fill();
+      ctx.strokeStyle = isFocused ? '#ffffff' : 'rgba(15, 23, 42, 0.85)';
+      ctx.lineWidth = isFocused ? 1.2 : 1;
+      ctx.stroke();
+
+      // Readable 1..7 index beside marker
+      const isLeft = project.worldPos.x < 0;
+      ctx.textAlign = isLeft ? 'right' : 'left';
+      const labelX = isLeft ? pt.x - (radius + 3.5) : pt.x + (radius + 3.5);
+      ctx.fillStyle = isFocused ? '#ffffff' : 'rgba(226, 232, 240, 0.82)';
+      ctx.fillText(String(project.index), labelX, pt.y + 0.5);
+    }
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+
+    // Gol G5 in crisp white with clear directional arrow
     const carPt = this.worldToMinimap(t.posX, t.posZ);
     const rad = ((t.headingDeg - 90) * Math.PI) / 180;
     ctx.save();
     ctx.translate(carPt.x, carPt.y);
     ctx.rotate(rad);
     ctx.beginPath();
-    ctx.moveTo(6, 0);
-    ctx.lineTo(-4, -3.5);
-    ctx.lineTo(-2, 0);
-    ctx.lineTo(-4, 3.5);
+    ctx.moveTo(7, 0);
+    ctx.lineTo(-4.5, -4);
+    ctx.lineTo(-2.2, 0);
+    ctx.lineTo(-4.5, 4);
     ctx.closePath();
-    ctx.fillStyle = '#d98f4e';
+    ctx.fillStyle = '#ffffff';
     ctx.fill();
-    ctx.strokeStyle = '#f2f3f5';
-    ctx.lineWidth = 1;
+    ctx.strokeStyle = '#0f172a';
+    ctx.lineWidth = 1.2;
     ctx.stroke();
     ctx.restore();
   }
@@ -955,21 +1002,21 @@ export class HudController {
     ctx.fillStyle = '#f8f9fa';
     ctx.fillRect(0, 0, w, h);
 
-    // Header bar (#1A2128 with #FF5D00 brand accent)
+    // Header bar (#1A2128 with Vincula cobalt blue accent)
     ctx.fillStyle = '#1a2128';
     ctx.fillRect(0, 0, w, 46);
-    ctx.fillStyle = '#ff5d00';
+    ctx.fillStyle = '#4d79e8';
     ctx.fillRect(0, 44, w, 2);
     ctx.fillStyle = '#ffffff';
     ctx.font = '600 14px "Space Grotesk", sans-serif';
     ctx.fillText('Vincula • Análise de Vínculos (/casos/409/vinculos)', 18, 28);
 
     const nodes = [
-      { x: w * 0.5, y: h * 0.52, r: 28, color: '#e04141', label: 'Investigado Principal', sub: 'CPF •••.412.880-••' },
-      { x: w * 0.25, y: h * 0.34, r: 21, color: '#f0ad4e', label: 'Banco do Brasil', sub: 'Ag 4546 • SIMBA' },
-      { x: w * 0.76, y: h * 0.36, r: 21, color: '#f0ad4e', label: 'Empresa Parceira', sub: 'CNPJ 14.882.•••' },
-      { x: w * 0.28, y: h * 0.75, r: 19, color: '#007bff', label: 'SITTEL_ERB.csv', sub: '248 chamadas' },
-      { x: w * 0.73, y: h * 0.75, r: 19, color: '#007bff', label: 'RIF_COAF_09.xlsx', sub: '14 alertas' },
+      { x: w * 0.5, y: h * 0.52, r: 28, color: '#dc4c4c', label: 'Investigado Principal', sub: 'CPF •••.412.880-••' },
+      { x: w * 0.25, y: h * 0.34, r: 21, color: '#c4a435', label: 'Banco do Brasil', sub: 'Ag 4546 • SIMBA' },
+      { x: w * 0.76, y: h * 0.36, r: 21, color: '#2ea86f', label: 'Empresa Parceira', sub: 'CNPJ 14.882.•••' },
+      { x: w * 0.28, y: h * 0.75, r: 19, color: '#4d79e8', label: 'SITTEL_ERB.csv', sub: '248 chamadas' },
+      { x: w * 0.73, y: h * 0.75, r: 19, color: '#279b9e', label: 'RIF_COAF_09.xlsx', sub: '14 alertas' },
     ];
 
     const pulse = (Math.sin(t * 2.2) + 1) * 0.5;
@@ -987,7 +1034,7 @@ export class HudController {
       // Travelling token along edge
       const px = a.x + (b.x - a.x) * ((t * 0.4 + i * 0.23) % 1);
       const py = a.y + (b.y - a.y) * ((t * 0.4 + i * 0.23) % 1);
-      ctx.fillStyle = '#ff5d00';
+      ctx.fillStyle = '#4d79e8';
       ctx.beginPath();
       ctx.arc(px, py, 3.5, 0, Math.PI * 2);
       ctx.fill();
@@ -1026,10 +1073,10 @@ export class HudController {
     ctx.fillText('941 pacientes  •  988 chamadas (-63% cache)  •  $0.0699  •  0% alucinação', 22, 56);
 
     const rows = [
-      { tier: 'A1', color: '#dc4b3e', name: 'Paciente #412 • Colecistectomia', note: 'Achado literal: "internação prévia em UPA 48h"', score: 94 },
-      { tier: 'A2', color: '#e07a34', name: 'Paciente #903 • Artroplastia Quadril', note: 'Achado literal: "3 atendimentos em UPA"', score: 86 },
-      { tier: 'B', color: '#d49b35', name: 'Paciente #218 • Hernioplastia', note: 'Achado literal: "retorno ao Pronto-Socorro"', score: 67 },
-      { tier: 'C', color: '#4d82c4', name: 'Paciente #789 • Eletivo Regular', note: 'Sem sinais agudos no prontuário', score: 34 },
+      { tier: 'A1', color: '#dc4c4c', name: 'Paciente #412 • Colecistectomia', note: 'Achado literal: "internação prévia em UPA 48h"', score: 94 },
+      { tier: 'A2', color: '#c4528d', name: 'Paciente #903 • Artroplastia Quadril', note: 'Achado literal: "3 atendimentos em UPA"', score: 86 },
+      { tier: 'B', color: '#c4a435', name: 'Paciente #218 • Hernioplastia', note: 'Achado literal: "retorno ao Pronto-Socorro"', score: 67 },
+      { tier: 'C', color: '#4a93d4', name: 'Paciente #789 • Eletivo Regular', note: 'Sem sinais agudos no prontuário', score: 34 },
     ];
 
     const activeIdx = Math.floor(t / 2.2) % rows.length;
@@ -1039,7 +1086,7 @@ export class HudController {
 
       ctx.fillStyle = isFocused ? '#23262e' : '#1c1f26';
       ctx.fillRect(22, y, w - 44, 72);
-      ctx.strokeStyle = isFocused ? '#d98f4e' : 'rgba(255,255,255,0.08)';
+      ctx.strokeStyle = isFocused ? '#e2e8f0' : 'rgba(255,255,255,0.08)';
       ctx.lineWidth = 1;
       ctx.strokeRect(22, y, w - 44, 72);
 
@@ -1060,7 +1107,7 @@ export class HudController {
       ctx.fillText(row.note, 92, y + 50);
 
       ctx.textAlign = 'right';
-      ctx.fillStyle = '#d98f4e';
+      ctx.fillStyle = '#e2e8f0';
       ctx.font = '600 14px "IBM Plex Mono", monospace';
       ctx.fillText(`SWALIS ${row.score}`, w - 38, y + 38);
       ctx.textAlign = 'left';

@@ -63,10 +63,11 @@ export class SmokeParticles {
     for (let i = 0; i < POOL_SIZE; i++) {
       const material = new THREE.SpriteMaterial({
         map: this.texture,
-        color: 0xa6adb8,
+        color: 0xe2e8f0,
         transparent: true,
         opacity: 0,
         depthWrite: false,
+        fog: false,
       });
 
       const sprite = new THREE.Sprite(material);
@@ -103,18 +104,18 @@ export class SmokeParticles {
 
       // Multi-lobe radial puffs give organic cloud silhouette instead of a flat disc
       const lobes = [
-        { x: 64, y: 64, r: 58, alpha: 0.55 },
-        { x: 50, y: 56, r: 42, alpha: 0.38 },
-        { x: 78, y: 58, r: 40, alpha: 0.36 },
-        { x: 60, y: 78, r: 42, alpha: 0.34 },
-        { x: 72, y: 46, r: 34, alpha: 0.32 },
+        { x: 64, y: 64, r: 58, alpha: 0.74 },
+        { x: 50, y: 56, r: 42, alpha: 0.52 },
+        { x: 78, y: 58, r: 40, alpha: 0.48 },
+        { x: 60, y: 78, r: 42, alpha: 0.46 },
+        { x: 72, y: 46, r: 34, alpha: 0.44 },
       ];
 
       for (const lobe of lobes) {
         const grad = ctx.createRadialGradient(lobe.x, lobe.y, 2, lobe.x, lobe.y, lobe.r);
         grad.addColorStop(0.0, `rgba(255, 255, 255, ${lobe.alpha})`);
-        grad.addColorStop(0.45, `rgba(242, 245, 250, ${lobe.alpha * 0.55})`);
-        grad.addColorStop(1.0, 'rgba(225, 232, 242, 0.0)');
+        grad.addColorStop(0.45, `rgba(246, 248, 252, ${lobe.alpha * 0.62})`);
+        grad.addColorStop(1.0, 'rgba(232, 238, 246, 0.0)');
         ctx.fillStyle = grad;
         ctx.beginPath();
         ctx.arc(lobe.x, lobe.y, lobe.r, 0, Math.PI * 2);
@@ -232,11 +233,11 @@ export class SmokeParticles {
       this.rearEmitAccum += rearRate * dt;
       while (this.rearEmitAccum >= 1) {
         this.rearEmitAccum -= 1;
-        const opacity = heavySmoke ? 0.26 + Math.random() * 0.12 : 0.06 + Math.random() * 0.04;
-        const startScale = heavySmoke ? 0.34 : 0.22;
-        const endScale = heavySmoke ? 2.0 + Math.random() * 0.85 : 0.85 + Math.random() * 0.3;
-        const maxAge = heavySmoke ? 1.0 + Math.random() * 0.42 : 0.5 + Math.random() * 0.2;
-        const tint = isDrifting || hardBrake ? 0xb8bec8 : 0x9aa1ac;
+        const opacity = heavySmoke ? 0.44 + Math.random() * 0.16 : 0.12 + Math.random() * 0.06;
+        const startScale = heavySmoke ? 0.36 : 0.24;
+        const endScale = heavySmoke ? 2.15 + Math.random() * 0.85 : 0.95 + Math.random() * 0.35;
+        const maxAge = heavySmoke ? 1.05 + Math.random() * 0.42 : 0.52 + Math.random() * 0.2;
+        const tint = isDrifting || hardBrake ? 0xf8fafc : 0xe2e8f0;
 
         for (const wheelPos of [WHEEL_RL_CONTACT, WHEEL_RR_CONTACT]) {
           this.emitFromLocalPoint(
@@ -268,8 +269,8 @@ export class SmokeParticles {
       this.frontEmitAccum += frontRate * dt;
       while (this.frontEmitAccum >= 1) {
         this.frontEmitAccum -= 1;
-        const opacity = hardLaunch || hardBrake ? 0.22 + Math.random() * 0.1 : 0.15 + Math.random() * 0.08;
-        const tint = hardBrake ? 0xb4bac4 : 0xa0a7b2;
+        const opacity = hardLaunch || hardBrake ? 0.36 + Math.random() * 0.14 : 0.24 + Math.random() * 0.1;
+        const tint = hardBrake ? 0xf1f5f9 : 0xdbe2ec;
 
         for (const wheelPos of [WHEEL_FL_CONTACT, WHEEL_FR_CONTACT]) {
           this.emitFromLocalPoint(
@@ -280,9 +281,9 @@ export class SmokeParticles {
             moveSign * 1.4,
             1.6,
             0.78,
-            0.28,
-            1.55 + Math.random() * 0.5,
-            0.8 + Math.random() * 0.28,
+            0.3,
+            1.65 + Math.random() * 0.5,
+            0.85 + Math.random() * 0.28,
             opacity,
             tint,
           );
@@ -292,8 +293,8 @@ export class SmokeParticles {
       this.frontEmitAccum = 0;
     }
 
-    // 3. Subtle tailpipe exhaust wisp
-    const exhaustRate = Math.abs(throttle) > 0.1 ? (isTurbo ? 11 : 6.5) : 2.0;
+    // 3. Tailpipe exhaust wisp (dark slate tint stays legible over stone avenue & green grass)
+    const exhaustRate = Math.abs(throttle) > 0.1 ? (isTurbo ? 11 : 6.5) : 2.2;
     this.exhaustEmitAccum += exhaustRate * dt;
     while (this.exhaustEmitAccum >= 1) {
       this.exhaustEmitAccum -= 1;
@@ -305,11 +306,11 @@ export class SmokeParticles {
         1.8 + Math.abs(throttle) * 2.2,
         0.45,
         0.52,
-        0.12,
-        0.58 + Math.abs(throttle) * 0.35,
-        0.5,
-        isTurbo ? 0.13 : 0.06,
-        isTurbo ? 0x9aa1ac : 0x767c87,
+        0.14,
+        0.65 + Math.abs(throttle) * 0.38,
+        0.54,
+        isTurbo ? 0.24 : 0.14,
+        isTurbo ? 0xcbd5e1 : 0x5c6470,
       );
     }
 

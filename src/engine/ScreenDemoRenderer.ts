@@ -39,6 +39,32 @@ const DEFAULT_SCREENS: Record<DemoKind, Array<{ src: string; label: string }>> =
   t2ia: [],
 };
 
+const FALLBACK_STATION_COLORS: Record<string, string> = {
+  leitorECU: '#dc4c4c',
+  vstable: '#2ea86f',
+  chatbot: '#279b9e',
+  vincula: '#4d79e8',
+  ordovitae: '#c4528d',
+  t2ia: '#c4a435',
+  smarttalent: '#4a93d4',
+};
+
+function getStationAccent(project: PortfolioProject): string {
+  const maybeColor = (project as PortfolioProject & { color?: string }).color;
+  return maybeColor || FALLBACK_STATION_COLORS[project.id] || '#4a93d4';
+}
+
+function hexToRgba(hex: string, alpha: number): string {
+  const clean = hex.replace('#', '');
+  const full = clean.length === 3 ? clean.split('').map((c) => c + c).join('') : clean;
+  const num = Number.parseInt(full, 16);
+  if (Number.isNaN(num)) return `rgba(74, 147, 212, ${alpha})`;
+  const r = (num >> 16) & 255;
+  const g = (num >> 8) & 255;
+  const b = num & 255;
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
 function resolveAssetUrl(path: string): string {
   if (/^https?:\/\//i.test(path)) return path;
   const base = (import.meta.env.BASE_URL || '/').replace(/\/+$/, '');
@@ -71,6 +97,7 @@ export class ScreenDemoRenderer {
   private readonly canvas: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
   private readonly project: PortfolioProject;
+  private readonly accentColor: string;
   private readonly demoKind: DemoKind;
   private readonly slides: LoadedSlide[] = [];
 
@@ -79,6 +106,7 @@ export class ScreenDemoRenderer {
 
   constructor(project: PortfolioProject) {
     this.project = project;
+    this.accentColor = getStationAccent(project);
     this.demoKind = project.demoKind;
 
     this.canvas = document.createElement('canvas');
@@ -89,6 +117,8 @@ export class ScreenDemoRenderer {
     if (!ctx) {
       throw new Error('Failed to acquire 2D context for ScreenDemoRenderer.');
     }
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
     this.ctx = ctx;
 
     this.initSlides();
@@ -192,8 +222,8 @@ export class ScreenDemoRenderer {
       pillW,
       pillH,
       6,
-      isPlaying ? 'rgba(18, 20, 25, 0.86)' : 'rgba(18, 20, 25, 0.92)',
-      isPlaying ? 'rgba(212, 140, 84, 0.55)' : 'rgba(148, 163, 184, 0.36)',
+      isPlaying ? 'rgba(18, 20, 25, 0.88)' : 'rgba(18, 20, 25, 0.94)',
+      isPlaying ? hexToRgba(this.accentColor, 0.75) : 'rgba(148, 163, 184, 0.36)',
     );
 
     ctx.beginPath();
@@ -334,11 +364,11 @@ export class ScreenDemoRenderer {
     cells.forEach((cell, cIdx) => {
       const cx = kwpX + 14 + cIdx * 136;
       const cy = scopeY + 36;
-      this.roundRect(cx, cy, 128, 86, 6, '#141a24', cell.warn ? '#d97706' : '#26303d');
+      this.roundRect(cx, cy, 128, 86, 6, '#141a24', cell.warn ? this.accentColor : '#26303d');
       ctx.fillStyle = '#94a3b8';
       ctx.font = '600 11px "IBM Plex Sans", sans-serif';
       ctx.fillText(cell.label, cx + 10, cy + 24);
-      ctx.fillStyle = cell.warn ? '#fbbf24' : '#38bdf8';
+      ctx.fillStyle = cell.warn ? '#f87171' : '#38bdf8';
       ctx.font = '700 22px "IBM Plex Mono", monospace';
       ctx.fillText(cell.value, cx + 10, cy + 62);
     });
@@ -1203,7 +1233,7 @@ export class ScreenDemoRenderer {
     ctx.fillStyle = '#f8fafc';
     ctx.font = '600 14px "IBM Plex Mono", monospace';
     ctx.fillText(`PLAYER DIÁRIO • DIA ${String(currentDay).padStart(2, '0')} / 30`, 52, playerY + 32);
-    this.drawProgressBar(350, playerY + 22, w - 410, 10, dayCycle / 12, '#ea580c');
+    this.drawProgressBar(350, playerY + 22, w - 410, 10, dayCycle / 12, this.accentColor);
   }
 
   // ---------------------------------------------------------------------------
@@ -1268,7 +1298,7 @@ export class ScreenDemoRenderer {
       ctx.fillStyle = '#16a34a';
       ctx.font = '600 14px "IBM Plex Mono", monospace';
       ctx.fillText('● Melhor Fitness (Geração)', 48, 174);
-      ctx.fillStyle = '#ea580c';
+      ctx.fillStyle = '#2563eb';
       ctx.fillText('● Fitness Médio Global', 298, 174);
 
       const gx = 68;
@@ -1288,7 +1318,7 @@ export class ScreenDemoRenderer {
         ctx.stroke();
       }
 
-      // Best fitness curve (#16a34a) and global avg (#ea580c)
+      // Best fitness curve (#16a34a) and global avg (#2563eb)
       const drawCurve = (color: string, fn: (u: number) => number) => {
         ctx.beginPath();
         const steps = Math.max(2, Math.round(gen * 0.8));
@@ -1304,10 +1334,10 @@ export class ScreenDemoRenderer {
         ctx.stroke();
       };
 
-      drawCurve('#ea580c', (u) => 0.14 + 0.61 * (1 - Math.exp(-3.2 * u)) + 0.02 * Math.sin(u * 28));
+      drawCurve('#2563eb', (u) => 0.14 + 0.61 * (1 - Math.exp(-3.2 * u)) + 0.02 * Math.sin(u * 28));
       drawCurve('#16a34a', (u) => 0.22 + 0.72 * (1 - Math.exp(-3.8 * u)) + 0.015 * Math.sin(u * 20));
 
-      // Right: Population fitness bars with amber elite (#f59e0b)
+      // Right: Population fitness bars with station gold elite (#c4a435)
       this.roundRect(834, 108, 422, 650, 10, '#ffffff', '#cbd5e1');
       ctx.fillStyle = '#0f172a';
       ctx.font = '700 17px "IBM Plex Sans", sans-serif';
@@ -1315,7 +1345,7 @@ export class ScreenDemoRenderer {
 
       ctx.fillStyle = '#475569';
       ctx.font = '400 13px "IBM Plex Sans", sans-serif';
-      ctx.fillText('Currículo: Médio -> Difícil • Top 4 Elite (Âmbar)', 858, 170);
+      ctx.fillText('Currículo: Médio -> Difícil • Top 4 Elite (Ocre)', 858, 170);
 
       for (let i = 0; i < 16; i++) {
         const by = 198 + i * 32;
@@ -1324,8 +1354,8 @@ export class ScreenDemoRenderer {
         ctx.fillStyle = '#475569';
         ctx.font = '600 12px "IBM Plex Mono", monospace';
         ctx.fillText(`#${String(i + 1).padStart(2, '0')}`, 858, by + 15);
-        this.drawProgressBar(896, by + 4, 270, 14, score, isElite ? '#f59e0b' : '#2563eb');
-        ctx.fillStyle = isElite ? '#b45309' : '#0f172a';
+        this.drawProgressBar(896, by + 4, 270, 14, score, isElite ? this.accentColor : '#2563eb');
+        ctx.fillStyle = isElite ? '#856d1b' : '#0f172a';
         ctx.textAlign = 'right';
         ctx.fillText(`${(score * 100).toFixed(1)}%`, 1234, by + 15);
         ctx.textAlign = 'left';
@@ -1510,7 +1540,7 @@ export class ScreenDemoRenderer {
 
     ctx.textAlign = 'left';
     ctx.textBaseline = 'alphabetic';
-    ctx.fillStyle = '#fb923c';
+    ctx.fillStyle = this.accentColor;
     ctx.font = '700 12px "IBM Plex Mono", monospace';
     ctx.fillText('TRIAGEM PREDITIVA • RANDOM FOREST', cardX + 20, cardY + 34);
 
@@ -1536,7 +1566,7 @@ export class ScreenDemoRenderer {
 
     // Financial impact metrics
     const metrics = [
-      { lbl: 'MARGEM NEGATIVA ASSOCIADA', val: 'US$ 2,15M', col: '#fbbf24' },
+      { lbl: 'MARGEM NEGATIVA ASSOCIADA', val: 'US$ 2,15M', col: '#fde047' },
       { lbl: 'BASE HISTÓRICA DATACO', val: '180.519 linhas', col: '#fafaf9' },
       { lbl: 'PRECISÃO (CLASSE 1)', val: '83,22% • 8 prod. = 84,6%', col: '#34d399' },
     ];
@@ -1557,7 +1587,7 @@ export class ScreenDemoRenderer {
       const dy = cardY + cardH - 36;
       ctx.beginPath();
       ctx.arc(dx, dy, i === idx ? 5.5 : 3.5, 0, Math.PI * 2);
-      ctx.fillStyle = i === idx ? '#fb923c' : '#57534e';
+      ctx.fillStyle = i === idx ? this.accentColor : '#57534e';
       ctx.fill();
     }
     ctx.fillStyle = '#a8a29e';

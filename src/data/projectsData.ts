@@ -20,6 +20,7 @@ export interface PortfolioProject {
   subtitle: string;
   category: string;
   period: string;
+  color: string;
   repoUrl: string;
   repoLabel: string;
   summary: string;
@@ -46,6 +47,7 @@ export const PORTFOLIO_PROJECTS: PortfolioProject[] = [
     subtitle: 'Datalogger & Scanner Automotivo 30 FPS — VW Gol G5 (Bosch ME7.5.30)',
     category: 'Sistemas Embarcados & Telemetria',
     period: '2026',
+    color: '#dc4c4c',
     repoUrl: 'https://github.com/RodrigoSchmittDeAlmeida/leitorECU',
     repoLabel: 'github.com/RodrigoSchmittDeAlmeida/leitorECU',
     summary:
@@ -70,7 +72,7 @@ export const PORTFOLIO_PROJECTS: PortfolioProject[] = [
       { label: 'Taxa de Plotagem', value: '30 FPS • 14 cards' },
       { label: 'Suíte Pytest', value: '99/99 testes' },
     ],
-    worldPos: { x: -13, z: -26, angleY: 0.38 },
+    worldPos: { x: -16.5, z: -28, angleY: 0.42 },
     demoKind: 'leitorECU',
     screenshots: [
       './screens/leitorecu/01-telemetry.png',
@@ -87,6 +89,7 @@ export const PORTFOLIO_PROJECTS: PortfolioProject[] = [
     subtitle: 'Plataforma B2B de Câmbio Internacional, Stablecoins & AppSec em Rust',
     category: 'FinTech B2B & AppSec',
     period: 'AGES / PUCRS • 2026',
+    color: '#2ea86f',
     repoUrl: 'https://github.com/RodrigoSchmittDeAlmeida/v-stable-frontend',
     repoLabel: 'github.com/RodrigoSchmittDeAlmeida/v-stable-frontend',
     summary:
@@ -111,7 +114,7 @@ export const PORTFOLIO_PROJECTS: PortfolioProject[] = [
       { label: 'Sanitizador Rust', value: 'zero-unsafe • 28 testes' },
       { label: 'Trilhos Globais', value: 'PIX • ACH • SEPA • SWIFT' },
     ],
-    worldPos: { x: 14, z: -56, angleY: -0.40 },
+    worldPos: { x: 16.5, z: -58, angleY: -0.42 },
     demoKind: 'vstable',
     screenshots: [
       './screens/vstable/01-login.png',
@@ -131,6 +134,7 @@ export const PORTFOLIO_PROJECTS: PortfolioProject[] = [
     subtitle: 'Assistente Virtual de Suporte Zero-PII & Rate-Limit de Nielsen',
     category: 'IA Aplicada & Engenharia de UX',
     period: 'AGES / PUCRS • 2026',
+    color: '#279b9e',
     repoUrl: 'https://github.com/RodrigoSchmittDeAlmeida/v-stable-frontend',
     repoLabel: 'SupportChatWidget.tsx • v-stable-frontend',
     summary:
@@ -153,7 +157,7 @@ export const PORTFOLIO_PROJECTS: PortfolioProject[] = [
       { label: 'Resiliência', value: 'Fallback offline embutido' },
       { label: 'Perguntas Rápidas', value: '4 fluxos principais' },
     ],
-    worldPos: { x: -14, z: -86, angleY: 0.38 },
+    worldPos: { x: -16.5, z: -88, angleY: 0.42 },
     demoKind: 'chatbot',
     screenshots: [],
     isChatbot: true,
@@ -166,6 +170,7 @@ export const PORTFOLIO_PROJECTS: PortfolioProject[] = [
     subtitle: 'Plataforma Investigativa de Análise de Vínculos em Grafo Interativo',
     category: 'Investigação Digital & Grafos',
     period: 'AGES / PUCRS • 2026',
+    color: '#4d79e8',
     repoUrl: 'https://tools.ages.pucrs.br/vincula/frontend',
     repoLabel: 'tools.ages.pucrs.br/vincula/frontend',
     summary:
@@ -190,7 +195,7 @@ export const PORTFOLIO_PROJECTS: PortfolioProject[] = [
       { label: 'Fontes Integradas', value: 'SIMBA • SITTEL • RIF' },
       { label: 'Ingestão', value: 'CNAB • CSV • XLSX' },
     ],
-    worldPos: { x: 14, z: -116, angleY: -0.40 },
+    worldPos: { x: 16.5, z: -118, angleY: -0.42 },
     demoKind: 'vincula',
     screenshots: [],
   },
@@ -202,6 +207,7 @@ export const PORTFOLIO_PROJECTS: PortfolioProject[] = [
     subtitle: 'Priorização Cirúrgica no SUS com IA Híbrida Anti-Alucinação',
     category: 'HealthTech & IA Clínica',
     period: '9ª Hackatona PUCRS / HSL • 2026',
+    color: '#c4528d',
     repoUrl: 'https://github.com/Hacktona-AGES-2026/OrdoVitae',
     repoLabel: 'github.com/Hacktona-AGES-2026/OrdoVitae',
     summary:
@@ -225,7 +231,7 @@ export const PORTFOLIO_PROJECTS: PortfolioProject[] = [
       { label: 'Alucinação', value: '0% (validação literal)' },
       { label: 'Testes Automatizados', value: '22/22 aprovados' },
     ],
-    worldPos: { x: -14, z: -146, angleY: 0.38 },
+    worldPos: { x: -16.5, z: -148, angleY: 0.42 },
     demoKind: 'ordovitae',
     screenshots: [],
   },
@@ -237,6 +243,7 @@ export const PORTFOLIO_PROJECTS: PortfolioProject[] = [
     subtitle: 'MLP Treinada por Algoritmo Genético (BLX-α) vs Minimax no Jogo da Velha',
     category: 'Inteligência Artificial & Computação Evolutiva',
     period: 'PUCRS • IA • 2026',
+    color: '#c4a435',
     repoUrl: 'https://github.com/RodrigoSchmittDeAlmeida/T2IA',
     repoLabel: 'github.com/RodrigoSchmittDeAlmeida/T2IA',
     summary:
@@ -260,7 +267,7 @@ export const PORTFOLIO_PROJECTS: PortfolioProject[] = [
       { label: 'Currículo', value: 'Médio → Difícil vs Minimax' },
       { label: 'Visualização', value: 'Fitness + Heatmap tanh 3×3' },
     ],
-    worldPos: { x: 14, z: -176, angleY: -0.40 },
+    worldPos: { x: 16.5, z: -178, angleY: -0.42 },
     demoKind: 't2ia',
     screenshots: [],
   },
@@ -272,6 +279,7 @@ export const PORTFOLIO_PROJECTS: PortfolioProject[] = [
     subtitle: 'Torre de Decisão Logística & Predição de Atrasos (DataCo Supply Chain)',
     category: 'Ciência de Dados & Machine Learning',
     period: 'PUCRS • 2026',
+    color: '#4a93d4',
     repoUrl: 'https://github.com/RodrigoSchmittDeAlmeida/Grupo8-Smart-Talent',
     repoLabel: 'github.com/RodrigoSchmittDeAlmeida/Grupo8-Smart-Talent',
     summary:
@@ -294,7 +302,7 @@ export const PORTFOLIO_PROJECTS: PortfolioProject[] = [
       { label: 'Acurácia / Recall', value: '69,25% acc • 55,01% rec' },
       { label: 'Serving', value: 'FastAPI + Docker' },
     ],
-    worldPos: { x: 0, z: -210, angleY: 0.0 },
+    worldPos: { x: 0, z: -214, angleY: 0.0 },
     demoKind: 'smarttalent',
     screenshots: [
       './screens/smarttalent/00-dashboard.png',
