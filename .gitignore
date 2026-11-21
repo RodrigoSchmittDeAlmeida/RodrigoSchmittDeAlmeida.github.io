@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.agents/
+Antigravity-Logs/
+*.blend1
+__pycache__/
+*.pyc
+.DS_Store
+Thumbs.db
+*.local

@@ -1,0 +1,20 @@
+{
+  "name": "portfolio-gol-g5-3d",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Portfólio 3D interativo em Three.js e estética Blender 5.1 com Volkswagen Gol G5 Preto - Rodrigo Schmitt de Almeida",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "three": "^0.174.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.174.0",
+    "typescript": "~5.7.2",
+    "vite": "^6.2.0"
+  }
+}
