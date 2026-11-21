@@ -434,28 +434,55 @@ export class CarController {
 
           if (name.startsWith('Mat_Headlight_Xenon')) {
             // Preserve GLB mat.color, mat.map, and mat.emissiveMap
-            mat.emissive = new THREE.Color(0xedf4ff);
-            mat.emissiveIntensity = this.headlightsOn ? 2.4 : 0.06;
-            mat.envMapIntensity = 1.25;
+            mat.metalness = 0.92;
+            mat.roughness = 0.09;
+            mat.envMapIntensity = 1.4;
+            mat.emissive = new THREE.Color(0xf2f7ff);
+            mat.emissiveIntensity = this.headlightsOn ? 2.4 : 0.04;
             headlights.add(mat);
           } else if (name.startsWith('Mat_Headlight_Lens')) {
-            // Crystal-clear outer headlight lens (excluded from glassMats so 1st-person view stays clear)
+            // Curved polycarbonate outer headlight lens with glassy sheen (excluded from glassMats so 1st-person view stays clear)
             mat.transparent = true;
-            mat.opacity = 0.16;
-            mat.roughness = 0.03;
-            mat.envMapIntensity = 1.15;
+            mat.opacity = 0.34;
+            mat.roughness = 0.02;
+            mat.metalness = 0.10;
+            mat.envMapIntensity = 2.2;
+            mat.depthWrite = false;
+            mat.side = THREE.DoubleSide;
+            if (mat instanceof THREE.MeshPhysicalMaterial) {
+              mat.clearcoat = 1.0;
+              mat.clearcoatRoughness = 0.015;
+              mat.reflectivity = 1.0;
+            }
           } else if (name.startsWith('Mat_Headlight_Mask_Black')) {
             mat.envMapIntensity = 0.85;
           } else if (name.startsWith('Mat_Chrome_Reflector')) {
             mat.envMapIntensity = 1.35;
+          } else if (name.startsWith('Mat_Taillight_Dark_Ruby')) {
+            mat.roughness = 0.045;
+            mat.metalness = 0.06;
+            mat.envMapIntensity = 1.45;
+            if (mat instanceof THREE.MeshPhysicalMaterial) {
+              mat.clearcoat = 1.0;
+              mat.clearcoatRoughness = 0.02;
+            }
           } else if (name.startsWith('Mat_Taillight_Ruby_Lens')) {
             // Translucent ruby taillight lens (excluded from glassMats)
             mat.transparent = true;
-            mat.opacity = 0.84;
-            mat.roughness = 0.04;
-            mat.envMapIntensity = 1.1;
-          } else if (name.startsWith('Mat_Taillight_Crystal_Chamber')) {
+            mat.opacity = 0.86;
+            mat.roughness = 0.035;
+            mat.envMapIntensity = 1.5;
+            mat.depthWrite = false;
+            if (mat instanceof THREE.MeshPhysicalMaterial) {
+              mat.clearcoat = 1.0;
+              mat.clearcoatRoughness = 0.02;
+            }
+          } else if (
+            name.startsWith('Mat_Taillight_Amber_Chamber') ||
+            name.startsWith('Mat_Taillight_Crystal_Chamber')
+          ) {
             mat.envMapIntensity = 1.25;
+            mat.roughness = 0.10;
           } else if (name.startsWith('Mat_Brakelight_Red')) {
             // Preserve GLB mat.map and mat.emissiveMap
             mat.emissive = new THREE.Color(0xff1818);
@@ -695,7 +722,7 @@ export class CarController {
     this.spotRight.visible = this.headlightsOn;
 
     for (const mat of this.headlightMats) {
-      mat.emissiveIntensity = this.headlightsOn ? 2.4 : 0.06;
+      mat.emissiveIntensity = this.headlightsOn ? 2.4 : 0.04;
     }
   }
 

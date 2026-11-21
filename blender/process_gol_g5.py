@@ -109,149 +109,85 @@ def _create_packed_image(name: str, rgba: np.ndarray) -> bpy.types.Image:
 
 
 def build_optics_textures() -> dict[str, bpy.types.Image]:
-    """Generate and pack 5 procedural 512x512 PBR textures for VW Gol G5 headlights & taillights."""
+    """Generate and pack 6 procedural 512x512 PBR textures for VW Gol G5 headlights & taillights."""
     size = 512
     lin = np.linspace(0.0, 1.0, size, dtype=np.float32)
     u, v = np.meshgrid(lin, lin)
 
     # ------------------------------------------------------------------
-    # 1 & 2. Headlight parabolic reflector + focused xenon emissive map
+    # 1 & 2. Clean chrome parabolic headlight reflector + uniform xenon emissive
     # ------------------------------------------------------------------
-    flute_u = 0.5 + 0.5 * np.cos(u * 2.0 * np.pi * 64.0)
-    flute_v = 0.5 + 0.5 * np.cos(v * 2.0 * np.pi * 48.0)
-    chrome_grid = 0.24 + 0.22 * flute_u + 0.14 * flute_v
+    flute_u = 0.5 + 0.5 * np.cos(u * 2.0 * np.pi * 56.0)
+    flute_v = 0.5 + 0.5 * np.cos(v * 2.0 * np.pi * 40.0)
+    chrome_val = 0.68 + 0.12 * flute_u + 0.08 * flute_v  # 0.68..0.88 light bluish-silver
     hl_rgb = np.stack(
-        [chrome_grid * 0.94, chrome_grid * 0.97, chrome_grid * 1.02],
+        [chrome_val * 0.93, chrome_val * 0.97, chrome_val * 1.00],
         axis=-1,
     ).astype(np.float32)
-    hl_em = np.full((size, size, 3), (0.02, 0.02, 0.024), dtype=np.float32)
 
-    # Primary UV dish (0.242, 0.637) + secondary coverage dish (0.232, 0.845)
-    for cu, cv, rad in ((0.242, 0.637, 0.108), (0.232, 0.845, 0.105)):
-        du = u - cu
-        dv = v - cv
-        r = np.sqrt(du * du + dv * dv) / rad
-        theta = np.arctan2(dv, du)
-
-        mask_ring = (r >= 0.80) & (r <= 1.05)
-        hl_rgb[mask_ring] = (0.032, 0.035, 0.044)
-
-        bowl = (r >= 0.23) & (r < 0.80)
-        rings = 0.5 + 0.5 * np.cos(r * np.pi * 16.0)
-        facets = 0.5 + 0.5 * np.cos(theta * 24.0)
-        bowl_val = np.clip(0.36 + 0.28 * rings + 0.16 * facets + 0.08 * (1.0 - r), 0.0, 0.92)
-        hl_rgb[bowl, 0] = bowl_val[bowl] * 0.91
-        hl_rgb[bowl, 1] = bowl_val[bowl] * 0.96
-        hl_rgb[bowl, 2] = bowl_val[bowl] * 1.04
-
-        shroud = (r >= 0.17) & (r < 0.23)
-        hl_rgb[shroud] = (0.045, 0.050, 0.064)
-
-        core = r < 0.17
-        core_falloff = np.clip(1.0 - (r / 0.17) ** 2, 0.0, 1.0)
-        hl_rgb[core, 0] = 0.36 + 0.36 * core_falloff[core]
-        hl_rgb[core, 1] = 0.58 + 0.28 * core_falloff[core]
-        hl_rgb[core, 2] = 0.88 + 0.10 * core_falloff[core]
-
-        # Focused xenon emitter core + subtle projector halo
-        glow = np.exp(-((r / 0.17) ** 2) * 2.1) + 0.22 * np.exp(-(((r - 0.34) / 0.09) ** 2))
-        glow *= (r <= 0.95).astype(np.float32)
-        hl_em[..., 0] = np.maximum(hl_em[..., 0], 0.02 + 0.84 * glow)
-        hl_em[..., 1] = np.maximum(hl_em[..., 1], 0.02 + 0.92 * glow)
-        hl_em[..., 2] = np.maximum(hl_em[..., 2], 0.024 + 0.98 * glow)
-
-    # Outer corner indicator reflector cell (0.85, 0.40)
-    du_c, dv_c = u - 0.85, v - 0.40
-    r_c = np.sqrt(du_c * du_c + dv_c * dv_c) / 0.10
-    theta_c = np.arctan2(dv_c, du_c)
-    c_mask = (r_c >= 0.78) & (r_c <= 1.02)
-    hl_rgb[c_mask] = (0.035, 0.038, 0.045)
-    c_bowl = r_c < 0.78
-    c_val = 0.38 + 0.26 * (0.5 + 0.5 * np.cos(r_c * np.pi * 12.0)) + 0.14 * (0.5 + 0.5 * np.cos(theta_c * 18.0))
-    hl_rgb[c_bowl, 0] = c_val[c_bowl] * 0.94
-    hl_rgb[c_bowl, 1] = c_val[c_bowl] * 0.96
-    hl_rgb[c_bowl, 2] = c_val[c_bowl] * 1.00
-    c_glow = 0.25 * np.exp(-((r_c / 0.24) ** 2)) * (r_c < 0.75).astype(np.float32)
-    hl_em[..., 0] = np.maximum(hl_em[..., 0], 0.02 + 0.95 * c_glow)
-    hl_em[..., 1] = np.maximum(hl_em[..., 1], 0.02 + 0.70 * c_glow)
-    hl_em[..., 2] = np.maximum(hl_em[..., 2], 0.024 + 0.28 * c_glow)
+    # Smooth, uniform cool-white xenon glow without dark rings or patches
+    hl_em_val = 0.78 + 0.10 * flute_u + 0.06 * flute_v
+    hl_em = np.stack(
+        [hl_em_val * 0.86, hl_em_val * 0.93, hl_em_val * 1.00],
+        axis=-1,
+    ).astype(np.float32)
 
     alpha_one = np.ones((size, size, 1), dtype=np.float32)
     tex_hl_refl = _create_packed_image("Tex_Headlight_Reflector", np.concatenate([hl_rgb, alpha_one], axis=-1))
     tex_hl_em = _create_packed_image("Tex_Headlight_Emissive", np.concatenate([hl_em, alpha_one], axis=-1))
 
     # ------------------------------------------------------------------
-    # 3 & 4. Taillight ruby Fresnel lens + Gol G5 twin rings + emissive
+    # 3 & 4. Clean ruby Fresnel taillight texture + uniform ruby emissive
     # ------------------------------------------------------------------
-    h_ribs = 0.5 + 0.5 * np.cos(v * 2.0 * np.pi * 60.0)
-    v_prism = 0.5 + 0.5 * np.cos(u * 2.0 * np.pi * 90.0)
+    h_ribs = 0.5 + 0.5 * np.cos(v * 2.0 * np.pi * 64.0)
+    ruby_r = 0.38 + 0.24 * h_ribs  # 0.38..0.62 rich ruby red
     ruby_rgb = np.stack(
         [
-            0.28 + 0.26 * h_ribs + 0.10 * v_prism,
-            0.010 + 0.016 * h_ribs,
-            0.014 + 0.020 * h_ribs,
+            ruby_r,
+            0.008 + 0.012 * h_ribs,
+            0.010 + 0.014 * h_ribs,
         ],
         axis=-1,
     ).astype(np.float32)
 
     ruby_em = np.stack(
         [
-            0.04 + 0.12 * h_ribs,
-            0.002 + 0.006 * h_ribs,
-            0.002 + 0.006 * h_ribs,
+            0.34 + 0.32 * h_ribs,
+            0.008 + 0.012 * h_ribs,
+            0.006 + 0.010 * h_ribs,
         ],
         axis=-1,
     ).astype(np.float32)
 
-    # Characteristic Gol G5 twin concentric reflector rings in brakelight UV region
-    for cu, cv, rad in ((0.685, 0.887, 0.048), (0.795, 0.887, 0.048)):
-        du = u - cu
-        dv = v - cv
-        r = np.sqrt(du * du + dv * dv) / rad
-        theta = np.arctan2(dv, du)
-
-        outer_dark = (r >= 0.84) & (r <= 1.02)
-        ruby_rgb[outer_dark] = (0.14, 0.006, 0.008)
-
-        ring = (r >= 0.50) & (r < 0.84)
-        ring_fac = 0.62 + 0.24 * (0.5 + 0.5 * np.cos(theta * 20.0))
-        ruby_rgb[ring, 0] = ring_fac[ring]
-        ruby_rgb[ring, 1] = 0.030 * ring_fac[ring]
-        ruby_rgb[ring, 2] = 0.028 * ring_fac[ring]
-
-        sep = (r >= 0.34) & (r < 0.50)
-        ruby_rgb[sep] = (0.18, 0.008, 0.010)
-
-        bull = r < 0.34
-        bull_val = 0.66 + 0.16 * (0.5 + 0.5 * np.cos(r * np.pi * 10.0))
-        ruby_rgb[bull, 0] = bull_val[bull]
-        ruby_rgb[bull, 1] = 0.028 * bull_val[bull]
-        ruby_rgb[bull, 2] = 0.026 * bull_val[bull]
-
-        ring_glow = np.exp(-(((r - 0.67) / 0.15) ** 2)) + 0.85 * np.exp(-((r / 0.26) ** 2))
-        ring_glow *= (r <= 0.96).astype(np.float32)
-        ruby_em[..., 0] = np.maximum(ruby_em[..., 0], 0.06 + 0.90 * ring_glow)
-        ruby_em[..., 1] = np.maximum(ruby_em[..., 1], 0.004 + 0.05 * ring_glow)
-        ruby_em[..., 2] = np.maximum(ruby_em[..., 2], 0.004 + 0.03 * ring_glow)
-
-    # High-mount brake light bar accent (brakelight_m covers U=[0.57, 0.89], V=[0.77, 0.99])
+    # Subtle boost on high-mount brake light bar (brakelight_m covers U=[0.57, 0.89], V=[0.77, 0.99])
     m_bar = (u >= 0.56) & (u <= 0.90) & (v >= 0.77) & (v <= 0.83)
-    ruby_em[m_bar, 0] = np.maximum(ruby_em[m_bar, 0], 0.72)
-    ruby_em[m_bar, 1] = np.maximum(ruby_em[m_bar, 1], 0.04)
+    ruby_em[m_bar, 0] = np.maximum(ruby_em[m_bar, 0], 0.76)
+    ruby_em[m_bar, 1] = np.maximum(ruby_em[m_bar, 1], 0.03)
 
     tex_tl_ruby = _create_packed_image("Tex_Taillight_Ruby", np.concatenate([ruby_rgb, alpha_one], axis=-1))
     tex_tl_em = _create_packed_image("Tex_Taillight_Emissive", np.concatenate([ruby_em, alpha_one], axis=-1))
 
     # ------------------------------------------------------------------
-    # 5. Crystal / smoked-silver multifaceted reflector for reverse & turn
+    # 5. Clean horizontal-fluted crystal-silver reverse reflector (0.68..0.82)
     # ------------------------------------------------------------------
-    d1 = np.abs(np.sin((u + v) * np.pi * 48.0))
-    d2 = np.abs(np.sin((u - v) * np.pi * 48.0))
-    h_flute = 0.5 + 0.5 * np.cos(v * 2.0 * np.pi * 72.0)
-    facets = 0.45 * (d1 * d2) + 0.35 * np.maximum(d1, d2) + 0.20 * h_flute
-    crys_val = 0.34 + 0.52 * facets
-    crys_rgb = np.stack([crys_val * 0.94, crys_val * 0.96, crys_val * 1.00], axis=-1).astype(np.float32)
+    h_flute = 0.5 + 0.5 * np.cos(v * 2.0 * np.pi * 68.0)
+    crys_val = 0.68 + 0.14 * h_flute
+    crys_rgb = np.stack([crys_val * 0.96, crys_val * 0.98, crys_val * 1.00], axis=-1).astype(np.float32)
     tex_tl_crystal = _create_packed_image("Tex_Taillight_Crystal", np.concatenate([crys_rgb, alpha_one], axis=-1))
+
+    # ------------------------------------------------------------------
+    # 6. Amber/smoked automotive turn-signal reflector (fine horizontal stripes)
+    # ------------------------------------------------------------------
+    amber_ribs = 0.5 + 0.5 * np.cos(v * 2.0 * np.pi * 64.0)
+    amber_rgb = np.stack(
+        [
+            0.72 + 0.16 * amber_ribs,  # 0.72..0.88
+            0.34 + 0.12 * amber_ribs,  # 0.34..0.46
+            0.05 + 0.05 * amber_ribs,  # 0.05..0.10
+        ],
+        axis=-1,
+    ).astype(np.float32)
+    tex_tl_amber = _create_packed_image("Tex_Taillight_Amber", np.concatenate([amber_rgb, alpha_one], axis=-1))
 
     return {
         "Tex_Headlight_Reflector": tex_hl_refl,
@@ -259,6 +195,7 @@ def build_optics_textures() -> dict[str, bpy.types.Image]:
         "Tex_Taillight_Ruby": tex_tl_ruby,
         "Tex_Taillight_Emissive": tex_tl_em,
         "Tex_Taillight_Crystal": tex_tl_crystal,
+        "Tex_Taillight_Amber": tex_tl_amber,
     }
 
 
@@ -374,28 +311,28 @@ def build_pbr_palette() -> dict[str, bpy.types.Material]:
         ),
         "Mat_Headlight_Lens": create_principled_material(
             "Mat_Headlight_Lens",
-            base_color=(0.95, 0.98, 1.0, 1.0),
-            metallic=0.0,
+            base_color=(0.14, 0.17, 0.22, 1.0),
+            metallic=0.08,
             roughness=0.025,
-            alpha=0.14,
+            alpha=0.34,
             coat_weight=1.0,
-            coat_roughness=0.02,
-            ior=1.50,
+            coat_roughness=0.015,
+            ior=1.52,
             is_blend=True,
         ),
         "Mat_Headlight_Mask_Black": create_principled_material(
             "Mat_Headlight_Mask_Black",
-            base_color=(0.012, 0.013, 0.016, 1.0),
-            metallic=0.18,
-            roughness=0.18,
-            coat_weight=0.75,
+            base_color=(0.024, 0.027, 0.033, 1.0),
+            metallic=0.28,
+            roughness=0.22,
+            coat_weight=0.65,
             coat_roughness=0.08,
         ),
         "Mat_Chrome_Reflector": create_principled_material(
             "Mat_Chrome_Reflector",
             base_color=(0.88, 0.90, 0.94, 1.0),
             metallic=0.96,
-            roughness=0.08,
+            roughness=0.07,
         ),
         "Mat_Brake_Caliper_Red": create_principled_material(
             "Mat_Brake_Caliper_Red",
@@ -417,9 +354,9 @@ def build_pbr_palette() -> dict[str, bpy.types.Material]:
         ),
         "Mat_Headlight_Xenon": create_principled_material(
             "Mat_Headlight_Xenon",
-            base_color=(0.78, 0.82, 0.88, 1.0),
-            metallic=0.86,
-            roughness=0.14,
+            base_color=(0.82, 0.86, 0.92, 1.0),
+            metallic=0.92,
+            roughness=0.09,
             coat_weight=0.5,
             emission_strength=0.35,
             base_color_image=tex["Tex_Headlight_Reflector"],
@@ -438,21 +375,30 @@ def build_pbr_palette() -> dict[str, bpy.types.Material]:
         ),
         "Mat_Taillight_Ruby_Lens": create_principled_material(
             "Mat_Taillight_Ruby_Lens",
-            base_color=(0.48, 0.012, 0.016, 1.0),
+            base_color=(0.50, 0.012, 0.015, 1.0),
             metallic=0.06,
-            roughness=0.04,
-            alpha=0.84,
+            roughness=0.035,
+            alpha=0.86,
             coat_weight=1.0,
             coat_roughness=0.02,
             is_blend=True,
         ),
-        "Mat_Taillight_Crystal_Chamber": create_principled_material(
-            "Mat_Taillight_Crystal_Chamber",
-            base_color=(0.78, 0.80, 0.84, 1.0),
-            metallic=0.60,
-            roughness=0.12,
-            coat_weight=0.85,
-            base_color_image=tex["Tex_Taillight_Crystal"],
+        "Mat_Taillight_Dark_Ruby": create_principled_material(
+            "Mat_Taillight_Dark_Ruby",
+            base_color=(0.18, 0.006, 0.009, 1.0),
+            metallic=0.06,
+            roughness=0.045,
+            coat_weight=1.0,
+            coat_roughness=0.02,
+            is_blend=False,
+        ),
+        "Mat_Taillight_Amber_Chamber": create_principled_material(
+            "Mat_Taillight_Amber_Chamber",
+            base_color=(0.80, 0.40, 0.075, 1.0),
+            metallic=0.35,
+            roughness=0.10,
+            coat_weight=0.90,
+            base_color_image=tex["Tex_Taillight_Amber"],
         ),
         "Mat_Reversing_Light": create_principled_material(
             "Mat_Reversing_Light",
@@ -486,9 +432,9 @@ def resolve_material_for_slot(
         if base == "vermelgo":
             return palette["Mat_Taillight_Ruby_Lens"]
         if base == "gol01":
-            return palette["Mat_CarPaint_Black"]
+            return palette["Mat_Taillight_Dark_Ruby"]
         if base.startswith("vehiclelights128"):
-            return palette["Mat_Taillight_Crystal_Chamber"]
+            return palette["Mat_Taillight_Amber_Chamber"]
     if obj_name in ("brakelight_l", "brakelight_r") and base.startswith("vehicle_generic_glasswindows2"):
         return palette["Mat_Taillight_Ruby_Lens"]
 
@@ -671,6 +617,163 @@ def decimate_boot_preserving_exterior(boot_obj: bpy.types.Object) -> None:
         bpy.ops.mesh.customdata_custom_splitnormals_clear()
     bpy.ops.object.shade_smooth_by_angle(angle=math.radians(38.0))
     boot_obj.data.validate(verbose=False)
+
+
+def recalc_outward_normals(obj: bpy.types.Object) -> None:
+    """Recalculate consistent outward face normals using bmesh."""
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    bm.normal_update()
+    bm.to_mesh(obj.data)
+    bm.free()
+    obj.data.validate(verbose=False)
+
+
+def refine_headlight_lens(luxfarol_obj: bpy.types.Object) -> None:
+    """Keep 100% of main headlight lenses (Z > 0.1), decimate heavy foglight lenses (Z <= 0.1) at 0.18, and fix normals."""
+    set_active_single(luxfarol_obj)
+    bpy.ops.object.mode_set(mode="EDIT")
+    bpy.ops.mesh.select_all(action="DESELECT")
+    bpy.ops.object.mode_set(mode="OBJECT")
+
+    fog_count = 0
+    for poly in luxfarol_obj.data.polygons:
+        wc = luxfarol_obj.matrix_world @ poly.center
+        if wc.z <= 0.1:
+            poly.select = True
+            fog_count += 1
+
+    if fog_count > 0:
+        bpy.ops.object.mode_set(mode="EDIT")
+        bpy.ops.mesh.separate(type="SELECTED")
+        bpy.ops.object.mode_set(mode="OBJECT")
+
+        separated = [o for o in bpy.context.selected_objects if o != luxfarol_obj]
+        for part in separated:
+            apply_decimate(part, 0.18, smooth_angle_deg=45.0)
+
+        bpy.ops.object.select_all(action="DESELECT")
+        luxfarol_obj.select_set(True)
+        for part in separated:
+            part.select_set(True)
+        bpy.context.view_layer.objects.active = luxfarol_obj
+        bpy.ops.object.join()
+
+    bm = bmesh.new()
+    bm.from_mesh(luxfarol_obj.data)
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    bm.normal_update()
+    for face in bm.faces:
+        wc = luxfarol_obj.matrix_world @ face.calc_center_median()
+        if wc.z > 0.1 and face.normal.y < 0.0:
+            face.normal_flip()
+    bm.normal_update()
+    bm.to_mesh(luxfarol_obj.data)
+    bm.free()
+
+    set_active_single(luxfarol_obj)
+    if luxfarol_obj.data.has_custom_normals:
+        bpy.ops.mesh.customdata_custom_splitnormals_clear()
+    bpy.ops.object.shade_smooth_by_angle(angle=math.radians(45.0))
+    luxfarol_obj.data.validate(verbose=False)
+
+
+def build_headlight_bulb_caps(palette: dict[str, bpy.types.Material]) -> bpy.types.Object:
+    """Create lightweight 3D Gol G5 dual-focus bulb deflector caps and amber turn bulbs (<250 tris)."""
+    bm = bmesh.new()
+
+    def add_dome_and_stem(
+        cx: float, cy: float, cz: float, radius: float, stem_y_back: float, mat_idx: int
+    ) -> None:
+        segs = 12
+        angles = [2.0 * math.pi * i / segs for i in range(segs)]
+        eq_verts = [
+            bm.verts.new((cx + radius * math.cos(a), cy, cz + radius * math.sin(a)))
+            for a in angles
+        ]
+        mid_r = radius * math.cos(math.radians(45.0))
+        mid_y = cy + radius * math.sin(math.radians(45.0))
+        mid_verts = [
+            bm.verts.new((cx + mid_r * math.cos(a), mid_y, cz + mid_r * math.sin(a)))
+            for a in angles
+        ]
+        pole = bm.verts.new((cx, cy + radius, cz))
+
+        created_faces: list[bmesh.types.BMFace] = []
+        for i in range(segs):
+            nxt = (i + 1) % segs
+            f_quad = bm.faces.new((eq_verts[i], eq_verts[nxt], mid_verts[nxt], mid_verts[i]))
+            f_tri = bm.faces.new((mid_verts[i], mid_verts[nxt], pole))
+            created_faces.extend((f_quad, f_tri))
+
+        stem_segs = 6
+        stem_r = radius * 0.40
+        s_angles = [2.0 * math.pi * i / stem_segs for i in range(stem_segs)]
+        s_back = [
+            bm.verts.new((cx + stem_r * math.cos(a), stem_y_back, cz + stem_r * math.sin(a)))
+            for a in s_angles
+        ]
+        s_front = [
+            bm.verts.new((cx + stem_r * math.cos(a), cy + 0.002, cz + stem_r * math.sin(a)))
+            for a in s_angles
+        ]
+        for i in range(stem_segs):
+            nxt = (i + 1) % stem_segs
+            created_faces.append(bm.faces.new((s_back[i], s_back[nxt], s_front[nxt], s_front[i])))
+
+        bm.normal_update()
+        ref = mathutils.Vector((cx, cy - 0.004, cz))
+        for f in created_faces:
+            f.material_index = mat_idx
+            f.smooth = True
+            if (f.calc_center_median() - ref).dot(f.normal) < 0.0:
+                f.normal_flip()
+
+    def add_amber_bulb(cx: float, cy: float, cz: float, radius: float, mat_idx: int) -> None:
+        segs = 12
+        angles = [2.0 * math.pi * i / segs for i in range(segs)]
+        eq_verts = [
+            bm.verts.new((cx + radius * math.cos(a), cy, cz + radius * math.sin(a)))
+            for a in angles
+        ]
+        front_pole = bm.verts.new((cx, cy + radius * 1.25, cz))
+        back_pole = bm.verts.new((cx, cy - radius * 1.25, cz))
+        created_faces: list[bmesh.types.BMFace] = []
+        for i in range(segs):
+            nxt = (i + 1) % segs
+            created_faces.append(bm.faces.new((eq_verts[i], eq_verts[nxt], front_pole)))
+            created_faces.append(bm.faces.new((eq_verts[nxt], eq_verts[i], back_pole)))
+        bm.normal_update()
+        ref = mathutils.Vector((cx, cy, cz))
+        for f in created_faces:
+            f.material_index = mat_idx
+            f.smooth = True
+            if (f.calc_center_median() - ref).dot(f.normal) < 0.0:
+                f.normal_flip()
+
+    for sign in (-1.0, 1.0):
+        # Inner high-beam focus deflector cap (dish back at Y~1.897, luxfarol at Y~2.061)
+        add_dome_and_stem(sign * 0.60, 1.935, 0.260, radius=0.018, stem_y_back=1.895, mat_idx=0)
+        # Outer low-beam focus deflector cap (dish back at Y~1.764, luxfarol at Y~1.926)
+        add_dome_and_stem(sign * 0.73, 1.830, 0.270, radius=0.020, stem_y_back=1.764, mat_idx=0)
+        # Side corner amber turn-signal bulb (dish back at Y~1.702, luxfarol at Y~1.84+)
+        add_amber_bulb(sign * 0.79, 1.770, 0.300, radius=0.014, mat_idx=1)
+
+    mesh = bpy.data.meshes.new("Headlight_Optics_Detail")
+    bm.to_mesh(mesh)
+    bm.free()
+
+    tri_count = sum(len(p.vertices) - 2 for p in mesh.polygons)
+    assert tri_count <= 250, f"Headlight_Optics_Detail exceeded 250 tris: {tri_count}"
+
+    obj = bpy.data.objects.new("Headlight_Optics_Detail", mesh)
+    bpy.context.scene.collection.objects.link(obj)
+    obj.data.materials.append(palette["Mat_Chrome_Reflector"])
+    obj.data.materials.append(palette["Mat_Taillight_Amber_Chamber"])
+    mesh.validate(verbose=False)
+    print(f"Created Headlight_Optics_Detail: {len(mesh.polygons)} polys / {tri_count} tris")
+    return obj
 
 
 def build_grid_floor(collection: bpy.types.Collection) -> bpy.types.Object:
@@ -1191,14 +1294,23 @@ def main() -> None:
         merge_split_vertices(obj, dist=0.0001)
         if obj.name == "boot":
             decimate_boot_preserving_exterior(obj)
+        elif obj.name == "luxfarol":
+            refine_headlight_lens(obj)
         elif obj.name == "Taillight_Housing_Rear":
+            recalc_outward_normals(obj)
             apply_decimate(obj, 1.0, smooth_angle_deg=35.0)
+        elif obj.name in ("brakelight_l", "brakelight_r"):
+            recalc_outward_normals(obj)
+            apply_decimate(obj, 1.0)
         elif obj.name == "wheel_lf.child":
             apply_decimate(obj, 0.25)
         elif obj.name in DECIMATE_RATIOS:
             apply_decimate(obj, DECIMATE_RATIOS[obj.name])
         else:
             apply_decimate(obj, 1.0)
+
+    # Add lightweight 3D dual-focus bulb deflector caps & amber turn bulbs inside headlights
+    build_headlight_bulb_caps(palette)
 
     # 5. Center wheel geometry origin and instantiate the 4 wheels (sharing L/R mesh data)
     src_wheel = bpy.data.objects["wheel_lf.child"]
@@ -1265,10 +1377,10 @@ def main() -> None:
     print(f"Global BBox X=[{min_x:.4f}, {max_x:.4f}] Y=[{min_y:.4f}, {max_y:.4f}] Z=[{min_z:.4f}, {max_z:.4f}]")
     print(f"Zero-size images remaining: {empty_images}")
 
-    assert total_polys <= 120000, f"Polygon budget exceeded: {total_polys} > 120000"
+    assert total_polys <= 115000, f"Polygon budget exceeded: {total_polys} > 115000"
     assert abs(min_z) < 0.01, f"Vehicle not grounded at Z=0: Z_min={min_z}"
     assert not empty_images, f"Empty images still exist: {empty_images}"
-    assert len(packed_images) == 5, f"Expected 5 packed procedural images, got {packed_images}"
+    assert len(packed_images) == 6, f"Expected 6 packed procedural images, got {packed_images}"
 
     # 7. Export clean GLB without Draco
     os.makedirs(os.path.dirname(GLB_OUT), exist_ok=True)
@@ -1292,7 +1404,7 @@ def main() -> None:
     )
     glb_bytes = os.path.getsize(GLB_OUT)
     print(f"Exported GLB: {GLB_OUT} ({glb_bytes} bytes / {glb_bytes / (1024 * 1024):.2f} MB)")
-    assert glb_bytes < 5.5 * 1024 * 1024, f"GLB exceeds 5.5 MB budget: {glb_bytes} bytes"
+    assert glb_bytes < 5.2 * 1024 * 1024, f"GLB exceeds 5.2 MB budget: {glb_bytes} bytes"
 
     # 8. Build animated Blender showcase scene, save .blend, and render preview PNG + MP4 + GIF
     setup_showcase_scene(car_objects, wheel_objects)
