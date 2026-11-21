@@ -79,7 +79,7 @@ export interface CarControllerCallbacks {
  */
 export class CarController {
   public readonly carGroup = new THREE.Group();
-  private readonly chassisGroup = new THREE.Group();
+  public readonly chassisGroup = new THREE.Group();
 
   private fallbackGroup: THREE.Group | null = null;
   private glbModelGroup: THREE.Object3D | null = null;
@@ -105,6 +105,8 @@ export class CarController {
   private headlightMats: THREE.MeshStandardMaterial[] = [];
   private brakelightMats: THREE.MeshStandardMaterial[] = [];
   private reversingLightMats: THREE.MeshStandardMaterial[] = [];
+  private glassMats: THREE.MeshStandardMaterial[] = [];
+  private firstPersonView = false;
 
   private readonly spotLeft: THREE.SpotLight;
   private readonly spotRight: THREE.SpotLight;
@@ -423,6 +425,7 @@ export class CarController {
         const headlights = new Set<THREE.MeshStandardMaterial>();
         const brakelights = new Set<THREE.MeshStandardMaterial>();
         const reversingLights = new Set<THREE.MeshStandardMaterial>();
+        const glasses = new Set<THREE.MeshStandardMaterial>();
 
         const registerMaterial = (mat: THREE.Material) => {
           if (!(mat instanceof THREE.MeshStandardMaterial)) return;
@@ -459,6 +462,8 @@ export class CarController {
             // Smoked glass with realistic blue sky reflection
             mat.envMapIntensity = 0.95;
             mat.roughness = 0.08;
+            mat.transparent = true;
+            glasses.add(mat);
           } else if (
             name.startsWith('Mat_Trim_Black') ||
             name.startsWith('Mat_Tire_Rubber')
@@ -494,6 +499,7 @@ export class CarController {
         this.headlightMats = Array.from(headlights);
         this.brakelightMats = Array.from(brakelights);
         this.reversingLightMats = Array.from(reversingLights);
+        this.glassMats = Array.from(glasses);
 
         const mountWheel = (
           wheelNode: THREE.Object3D | null,
@@ -557,6 +563,7 @@ export class CarController {
 
         this.modelLoaded = true;
         this.applyHeadlightState();
+        this.setFirstPersonView(this.firstPersonView);
       },
       undefined,
       () => {
@@ -640,6 +647,15 @@ export class CarController {
   private cancelAutopilot(): void {
     this.autopilot = null;
     this.tourActive = false;
+  }
+
+  public setFirstPersonView(active: boolean): void {
+    this.firstPersonView = active;
+    for (const mat of this.glassMats) {
+      mat.transparent = true;
+      mat.opacity = active ? 0.16 : 0.55;
+      mat.needsUpdate = true;
+    }
   }
 
   public toggleHeadlights(): boolean {

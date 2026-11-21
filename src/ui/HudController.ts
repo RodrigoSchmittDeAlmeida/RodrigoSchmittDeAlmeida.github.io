@@ -1,10 +1,11 @@
 import type { CarTelemetryState } from '../engine/CarController';
+import type { CameraMode } from '../engine/SceneManager';
 import type { DemoKind, PortfolioProject } from '../data/projectsData';
 
 export interface HudCallbacks {
   onDriveToProject: (projectId: string) => void;
   onToggleTour: () => boolean;
-  onToggleCameraMode: (mode: 'chase' | 'orbit') => void;
+  onToggleCameraMode: (mode: CameraMode) => void;
   onToggleAudio: () => boolean;
   onToggleHeadlights: () => boolean;
   onResetCar: () => void;
@@ -203,7 +204,7 @@ export class HudController {
   private readonly projects: PortfolioProject[];
   private readonly callbacks: HudCallbacks;
 
-  private cameraMode: 'chase' | 'orbit' = 'chase';
+  private cameraMode: CameraMode = 'chase';
   private audioEnabled = false;
   private headlightsOn = true;
   private tourActive = false;
@@ -259,7 +260,12 @@ export class HudController {
       }
       if (e.code === 'KeyC') {
         e.preventDefault();
-        this.toggleCameraMode();
+        this.cycleCameraMode();
+        return;
+      }
+      if (e.code === 'KeyV') {
+        e.preventDefault();
+        this.toggleFirstPersonMode();
         return;
       }
     }
@@ -312,9 +318,9 @@ export class HudController {
             ${ICONS.tour}
             <span>Tour Auto</span>
           </button>
-          <button type="button" class="ctrl-btn is-active" id="btn-cam-mode" title="Alternar Câmera (C)">
+          <button type="button" class="ctrl-btn" id="btn-cam-mode" title="Alternar Câmera: 3ª Pessoa → 1ª Pessoa → Órbita (C) | 1ª Pessoa (V)">
             ${ICONS.camera}
-            <span>Câmera</span>
+            <span>3ª Pessoa</span>
           </button>
           <button type="button" class="ctrl-btn" id="btn-audio" title="Ativar/Desativar Som do Motor">
             ${ICONS.audio}
@@ -391,6 +397,7 @@ export class HudController {
           <div class="legend-item"><span class="kbd">Espaço</span> Drift</div>
           <div class="legend-item"><span class="kbd">T</span> Tour Auto</div>
           <div class="legend-item"><span class="kbd">C</span> Câmera</div>
+          <div class="legend-item"><span class="kbd">V</span> 1ª Pessoa</div>
           <div class="legend-item"><span class="kbd">E</span> Abrir Tela</div>
           <div class="legend-item"><span class="kbd">1–7</span> Estações</div>
         </div>
@@ -434,6 +441,8 @@ export class HudController {
         this.stationBtns.set(id, btn);
       }
     });
+
+    this.updateCameraModeUi();
   }
 
   private bindEvents(): void {
@@ -446,7 +455,7 @@ export class HudController {
       this.syncTourUi();
     });
 
-    this.camBtn.addEventListener('click', () => this.toggleCameraMode());
+    this.camBtn.addEventListener('click', () => this.cycleCameraMode());
 
     const toggleAudioHandler = (): void => {
       this.audioEnabled = this.callbacks.onToggleAudio();
@@ -512,14 +521,40 @@ export class HudController {
     window.addEventListener('keydown', this.handleKeyDown);
   }
 
-  private toggleCameraMode(): void {
-    this.cameraMode = this.cameraMode === 'chase' ? 'orbit' : 'chase';
-    this.camBtn.classList.toggle('is-active', this.cameraMode === 'chase');
+  private cycleCameraMode(): void {
+    const nextMode: CameraMode =
+      this.cameraMode === 'chase'
+        ? 'firstperson'
+        : this.cameraMode === 'firstperson'
+          ? 'orbit'
+          : 'chase';
+    this.setCameraMode(nextMode);
+  }
+
+  private toggleFirstPersonMode(): void {
+    const nextMode: CameraMode =
+      this.cameraMode === 'firstperson' ? 'chase' : 'firstperson';
+    this.setCameraMode(nextMode);
+  }
+
+  private setCameraMode(mode: CameraMode): void {
+    if (this.cameraMode === mode) return;
+    this.cameraMode = mode;
+    this.updateCameraModeUi();
+    this.callbacks.onToggleCameraMode(mode);
+  }
+
+  private updateCameraModeUi(): void {
+    this.camBtn.classList.toggle('is-active', this.cameraMode !== 'chase');
     const labelSpan = this.camBtn.querySelector('span');
     if (labelSpan) {
-      labelSpan.textContent = this.cameraMode === 'chase' ? 'Câmera' : 'Órbita';
+      labelSpan.textContent =
+        this.cameraMode === 'chase'
+          ? '3ª Pessoa'
+          : this.cameraMode === 'firstperson'
+            ? '1ª Pessoa'
+            : 'Órbita';
     }
-    this.callbacks.onToggleCameraMode(this.cameraMode);
   }
 
   public setAudioEnabledState(enabled: boolean): void {

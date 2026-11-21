@@ -1,6 +1,6 @@
 import './style.css';
 import { PORTFOLIO_PROJECTS } from './data/projectsData';
-import { SceneManager } from './engine/SceneManager';
+import { SceneManager, type CameraMode } from './engine/SceneManager';
 import { HudController } from './ui/HudController';
 
 function bootstrap(): void {
@@ -33,7 +33,7 @@ function bootstrap(): void {
     onToggleTour: () => {
       return sceneManager.toggleAutonomousTour();
     },
-    onToggleCameraMode: (mode) => {
+    onToggleCameraMode: (mode: CameraMode) => {
       sceneManager.setCameraMode(mode);
     },
     onToggleAudio: () => {

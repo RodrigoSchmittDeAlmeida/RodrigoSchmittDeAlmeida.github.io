@@ -39,12 +39,15 @@ function createRng(seed: number): () => number {
 }
 
 /**
- * Daytime Minecraft voxel world surrounding the 3D portfolio avenue:
+ * Daytime Minecraft 1.21+ voxel world surrounding the 3D portfolio avenue:
  * - 16x16 pixel-art canvas textures with NearestFilter + SRGBColorSpace
- * - Central stone-brick & andesite avenue (X in [-7.5, +7.5], Z in [-214, +24])
- *   with stone-slab curbs and connecting stone paths to all 7 project bays
- * - Vibrant daytime sky dome, square Minecraft sun, and drifting voxel clouds
- * - Oak & Birch trees + stepped hills strictly in the distant perimeter
+ * - Central Stone Brick + Mossy/Cracked Stone Brick avenue (X in [-7.5, +7.5], Z in [-214, +24])
+ *   with stone-slab curbs, connecting bay paths, roadside Minecraft lanterns (|X| = 32),
+ *   and crossed-plane flowers & tall grass in the lateral meadows (|X| in [24, 37])
+ * - Vibrant daytime sky dome, square Minecraft sun in the front-right horizon,
+ *   and low drifting voxel clouds (y = 24..34) with fog blending
+ * - High Jagged Peaks / Meadows mountain ranges (y = 1..32) with Deepslate/Stone/Grass/Snow
+ *   and Spruce, Oak & Birch trees strictly in the distant perimeter
  *   (zero elevated blocks inside |X| < 38 && Z in (-236, 36))
  */
 export class MinecraftWorld {
@@ -71,12 +74,13 @@ export class MinecraftWorld {
     this.prevBackground = scene.background;
     this.prevFog = scene.fog;
 
-    scene.background = new THREE.Color(0x88b8ff);
-    scene.fog = new THREE.Fog(0xbcd8ff, 88, 285);
+    scene.background = new THREE.Color(0x9bc4f7);
+    scene.fog = new THREE.Fog(0xb7d4fa, 42, 168);
 
     const textures = this.createPixelTextures();
     this.buildSkyAndSun();
     this.buildGroundAndRoads(projects, textures);
+    this.buildRoadsideLanternsAndFlowers(projects, textures);
     this.buildVoxelClouds();
     this.buildPerimeterForestAndHills(textures);
 
@@ -182,10 +186,16 @@ export class MinecraftWorld {
       }
     });
 
-    // 4. Stone Brick & Andesite Road Texture (16x16)
+    // 4. Stone Brick, Cracked & Mossy Stone Bricks (16x16 per tile, 8x8 tile atlas for avenue)
     const stonePalette = ['#7d8086', '#6d7076', '#8d9096'];
-    const paintStoneRoad = (ctx: CanvasRenderingContext2D, size: number) => {
-      const rng = createRng(404);
+    const paintSingleStoneBrickTile = (
+      ctx: CanvasRenderingContext2D,
+      ox: number,
+      oy: number,
+      rng: () => number,
+      variant: 'normal' | 'cracked' | 'mossy',
+    ) => {
+      const size = 16;
       for (let y = 0; y < size; y++) {
         for (let x = 0; x < size; x++) {
           const isHorizSeam = y === 0 || y === 8;
@@ -197,14 +207,107 @@ export class MinecraftWorld {
           } else {
             ctx.fillStyle = stonePalette[Math.floor(rng() * stonePalette.length)];
           }
-          ctx.fillRect(x, y, 1, 1);
+          ctx.fillRect(ox + x, oy + y, 1, 1);
+        }
+      }
+
+      if (variant === 'cracked') {
+        const cracks = [
+          [2, 2], [3, 3], [4, 3], [5, 4], [6, 5], [6, 6],
+          [10, 10], [11, 11], [11, 12], [12, 13], [13, 14],
+        ];
+        for (const [cx, cy] of cracks) {
+          ctx.fillStyle = '#474a50';
+          ctx.fillRect(ox + cx, oy + cy, 1, 1);
+        }
+      } else if (variant === 'mossy') {
+        const mossShades = ['#4f7d2f', '#5e9139', '#3f6823', '#6ca243'];
+        for (let y = 0; y < size; y++) {
+          for (let x = 0; x < size; x++) {
+            const nearSeam =
+              y <= 2 ||
+              Math.abs(y - 8) <= 1 ||
+              x <= 1 ||
+              (y < 8 && Math.abs(x - 8) <= 1) ||
+              (y >= 8 && (Math.abs(x - 4) <= 1 || Math.abs(x - 12) <= 1));
+            if (nearSeam && rng() < 0.42) {
+              ctx.fillStyle = mossShades[Math.floor(rng() * mossShades.length)];
+              ctx.fillRect(ox + x, oy + y, 1, 1);
+            } else if (rng() < 0.09) {
+              ctx.fillStyle = mossShades[Math.floor(rng() * mossShades.length)];
+              ctx.fillRect(ox + x, oy + y, 1, 1);
+            }
+          }
         }
       }
     };
 
-    const avenueTex = this.makeCanvasTexture(16, paintStoneRoad, 15, 238);
+    const paintStoneRoad = (ctx: CanvasRenderingContext2D) => {
+      paintSingleStoneBrickTile(ctx, 0, 0, createRng(404), 'normal');
+    };
+
+    const avenueTex = this.makeCanvasTexture(
+      128,
+      (ctx) => {
+        const rng = createRng(4041);
+        for (let ty = 0; ty < 8; ty++) {
+          for (let tx = 0; tx < 8; tx++) {
+            const roll = rng();
+            const variant: 'normal' | 'cracked' | 'mossy' =
+              roll < 0.72 ? 'normal' : roll < 0.87 ? 'cracked' : 'mossy';
+            paintSingleStoneBrickTile(
+              ctx,
+              tx * 16,
+              ty * 16,
+              createRng(4100 + ty * 31 + tx * 17),
+              variant,
+            );
+          }
+        }
+      },
+      15 / 8,
+      238 / 8,
+    );
     const pathTex = this.makeCanvasTexture(16, paintStoneRoad, 7, 14);
     const plazaTex = this.makeCanvasTexture(16, paintStoneRoad, 10, 10);
+
+    // 4b. Mountain Stone, Deepslate & Snow Blocks (16x16 Minecraft 1.21+)
+    const stoneTex = this.makeCanvasTexture(16, (ctx, size) => {
+      const rng = createRng(440);
+      const shades = ['#7d8086', '#72757b', '#878a90', '#696c72'];
+      for (let y = 0; y < size; y++) {
+        for (let x = 0; x < size; x++) {
+          ctx.fillStyle = shades[Math.floor(rng() * shades.length)];
+          ctx.fillRect(x, y, 1, 1);
+        }
+      }
+    });
+
+    const deepslateTex = this.makeCanvasTexture(16, (ctx, size) => {
+      const rng = createRng(450);
+      const shades = ['#4d5159', '#43474f', '#575b64', '#3b3e46'];
+      for (let y = 0; y < size; y++) {
+        const rowBias = y % 4 === 0 ? 1 : 0;
+        for (let x = 0; x < size; x++) {
+          const idx = Math.min(shades.length - 1, rowBias + Math.floor(rng() * 3));
+          ctx.fillStyle = shades[idx];
+          ctx.fillRect(x, y, 1, 1);
+        }
+      }
+    });
+
+    const snowTex = this.makeCanvasTexture(16, (ctx, size) => {
+      const rng = createRng(460);
+      const shades = ['#f2f6fb', '#eaf1fa', '#ffffff', '#e1ebf7'];
+      for (let y = 0; y < size; y++) {
+        for (let x = 0; x < size; x++) {
+          const r = rng();
+          const idx = r < 0.45 ? 0 : r < 0.72 ? 1 : r < 0.9 ? 2 : 3;
+          ctx.fillStyle = shades[idx];
+          ctx.fillRect(x, y, 1, 1);
+        }
+      }
+    });
 
     // 5. Stone Slab Curb Texture (16x16)
     const slabPalette = ['#94989e', '#868a90', '#a1a5ab'];
@@ -319,6 +422,129 @@ export class MinecraftWorld {
       }
     });
 
+    // 10. Spruce Log Side, Top & Deep Evergreen Leaves (16x16)
+    const spruceBark = this.makeCanvasTexture(16, (ctx, size) => {
+      const rng = createRng(1010);
+      const shades = ['#3a2513', '#2e1d0e', '#462e18', '#25170b'];
+      for (let x = 0; x < size; x++) {
+        const colBias = x % 4 === 0 ? 1 : 0;
+        for (let y = 0; y < size; y++) {
+          const idx = Math.min(shades.length - 1, colBias + Math.floor(rng() * 3));
+          ctx.fillStyle = shades[idx];
+          ctx.fillRect(x, y, 1, 1);
+        }
+      }
+    });
+
+    const spruceTop = this.makeCanvasTexture(16, (ctx, size) => {
+      for (let y = 0; y < size; y++) {
+        for (let x = 0; x < size; x++) {
+          const border = x === 0 || x === 15 || y === 0 || y === 15;
+          const ring = x === 3 || x === 12 || y === 3 || y === 12;
+          ctx.fillStyle = border ? '#2e1d0e' : ring ? '#6e4e2f' : '#85603c';
+          ctx.fillRect(x, y, 1, 1);
+        }
+      }
+    });
+
+    const spruceLeaves = this.makeCanvasTexture(16, (ctx, size) => {
+      const rng = createRng(1020);
+      const shades = ['#284a2a', '#1f3b21', '#325a34', '#182f1a'];
+      for (let y = 0; y < size; y++) {
+        for (let x = 0; x < size; x++) {
+          const r = rng();
+          const idx = r < 0.36 ? 0 : r < 0.7 ? 1 : r < 0.88 ? 2 : 3;
+          ctx.fillStyle = shades[idx];
+          ctx.fillRect(x, y, 1, 1);
+        }
+      }
+    });
+
+    // 11. Crossed-Plane Flowers & Tall Grass (16x16 RGBA pixel art with alpha cutout)
+    const paintStemAndLeaves = (ctx: CanvasRenderingContext2D) => {
+      ctx.clearRect(0, 0, 16, 16);
+      ctx.fillStyle = '#3f7d24';
+      ctx.fillRect(7, 8, 2, 8);
+      ctx.fillStyle = '#538e2c';
+      ctx.fillRect(5, 11, 2, 2);
+      ctx.fillRect(9, 10, 2, 2);
+      ctx.fillRect(6, 13, 1, 2);
+    };
+
+    const poppyTex = this.makeCanvasTexture(16, (ctx) => {
+      paintStemAndLeaves(ctx);
+      ctx.fillStyle = '#c92323';
+      ctx.fillRect(5, 3, 6, 5);
+      ctx.fillRect(4, 4, 8, 3);
+      ctx.fillStyle = '#ef3e3e';
+      ctx.fillRect(6, 3, 4, 3);
+      ctx.fillRect(5, 4, 2, 2);
+      ctx.fillStyle = '#241a18';
+      ctx.fillRect(7, 5, 2, 2);
+    });
+
+    const dandelionTex = this.makeCanvasTexture(16, (ctx) => {
+      paintStemAndLeaves(ctx);
+      ctx.fillStyle = '#eab308';
+      ctx.fillRect(5, 4, 6, 4);
+      ctx.fillRect(6, 3, 4, 6);
+      ctx.fillStyle = '#fde047';
+      ctx.fillRect(6, 4, 4, 4);
+      ctx.fillStyle = '#ca8a04';
+      ctx.fillRect(7, 5, 2, 2);
+    });
+
+    const cornflowerTex = this.makeCanvasTexture(16, (ctx) => {
+      paintStemAndLeaves(ctx);
+      ctx.fillStyle = '#2563eb';
+      ctx.fillRect(5, 3, 6, 5);
+      ctx.fillRect(4, 5, 8, 2);
+      ctx.fillStyle = '#60a5fa';
+      ctx.fillRect(6, 3, 4, 2);
+      ctx.fillRect(5, 4, 2, 2);
+      ctx.fillRect(9, 4, 2, 2);
+      ctx.fillStyle = '#1e3a8a';
+      ctx.fillRect(7, 5, 2, 2);
+    });
+
+    const tallGrassTex = this.makeCanvasTexture(16, (ctx) => {
+      ctx.clearRect(0, 0, 16, 16);
+      const blades: Array<[number, number, number, string]> = [
+        [2, 7, 9, '#4c8628'],
+        [4, 4, 12, '#62a436'],
+        [6, 6, 10, '#538e2c'],
+        [8, 3, 13, '#72b841'],
+        [10, 5, 11, '#5a9931'],
+        [12, 6, 10, '#4a8227'],
+        [14, 8, 8, '#65a838'],
+      ];
+      for (const [bx, topY, h, color] of blades) {
+        ctx.fillStyle = color;
+        ctx.fillRect(bx, topY, 1, h);
+        if (topY > 3) {
+          ctx.fillRect(Math.max(0, bx - 1), topY + 2, 1, Math.max(2, h - 4));
+        }
+      }
+    });
+
+    // 12. Minecraft Lantern Emissive Texture (16x16)
+    const lanternTex = this.makeCanvasTexture(16, (ctx) => {
+      ctx.fillStyle = '#343942';
+      ctx.fillRect(0, 0, 16, 16);
+      ctx.fillStyle = '#f3cc6d';
+      ctx.fillRect(2, 3, 12, 10);
+      ctx.fillStyle = '#f8e59b';
+      ctx.fillRect(3, 4, 10, 8);
+      ctx.fillStyle = '#fff5ca';
+      ctx.fillRect(5, 5, 6, 6);
+      // Dark iron vertical ribs
+      ctx.fillStyle = '#343942';
+      ctx.fillRect(0, 0, 2, 16);
+      ctx.fillRect(14, 0, 2, 16);
+      ctx.fillRect(0, 0, 16, 2);
+      ctx.fillRect(0, 14, 16, 2);
+    });
+
     return {
       grassTopGround,
       grassTopBlock,
@@ -328,19 +554,30 @@ export class MinecraftWorld {
       pathTex,
       plazaTex,
       slabCurbTex,
+      stoneTex,
+      deepslateTex,
+      snowTex,
       oakBark,
       oakTop,
       oakLeaves,
       birchBark,
       birchTop,
       birchLeaves,
+      spruceBark,
+      spruceTop,
+      spruceLeaves,
+      poppyTex,
+      dandelionTex,
+      cornflowerTex,
+      tallGrassTex,
+      lanternTex,
     };
   }
 
   private buildSkyAndSun(): void {
     this.skyGroup.name = 'Minecraft_Sky_Dome';
 
-    // Seamless sky dome blending zenith #88b8ff -> horizon #bcd8ff (matches Fog)
+    // Seamless sky dome blending zenith #6aa4f8 -> #9bc4f7 -> horizon #b7d4fa (matches Fog)
     const skyCanvas = document.createElement('canvas');
     skyCanvas.width = 64;
     skyCanvas.height = 128;
@@ -348,10 +585,10 @@ export class MinecraftWorld {
     if (ctx) {
       const grad = ctx.createLinearGradient(0, 0, 0, skyCanvas.height);
       grad.addColorStop(0.0, '#6aa4f8');
-      grad.addColorStop(0.28, '#88b8ff');
-      grad.addColorStop(0.49, '#bcd8ff');
-      grad.addColorStop(0.55, '#bcd8ff');
-      grad.addColorStop(1.0, '#9fc2ee');
+      grad.addColorStop(0.28, '#9bc4f7');
+      grad.addColorStop(0.49, '#b7d4fa');
+      grad.addColorStop(0.56, '#b7d4fa');
+      grad.addColorStop(1.0, '#9bc4f7');
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, skyCanvas.width, skyCanvas.height);
     }
@@ -367,7 +604,8 @@ export class MinecraftWorld {
     const skyMesh = new THREE.Mesh(skyGeo, skyMat);
     this.skyGroup.add(skyMesh);
 
-    // Classic square Minecraft Sun high in the sky
+    // Classic square Minecraft Sun in the front-right horizon (z < 0, moderate height)
+    // clearly visible in both 3rd-person and 1st-person views above the Jagged Peaks
     const sunCanvas = document.createElement('canvas');
     sunCanvas.width = 16;
     sunCanvas.height = 16;
@@ -386,29 +624,28 @@ export class MinecraftWorld {
     sunTex.minFilter = THREE.NearestFilter;
     sunTex.generateMipmaps = false;
 
-    const sunGeo = new THREE.PlaneGeometry(34, 34);
+    const sunGeo = new THREE.PlaneGeometry(28, 28);
     const sunMat = new THREE.MeshBasicMaterial({
       map: sunTex,
       fog: false,
       depthWrite: false,
     });
     const sunMesh = new THREE.Mesh(sunGeo, sunMat);
-    // Align roughly with sunLight direction (+16, +26, +14)
-    sunMesh.position.set(125, 205, 108);
+    sunMesh.position.set(108, 52, -255);
     sunMesh.lookAt(0, 0, 0);
     this.skyGroup.add(sunMesh);
 
     // Soft glowing sun halo
-    const haloGeo = new THREE.PlaneGeometry(54, 54);
+    const haloGeo = new THREE.PlaneGeometry(46, 46);
     const haloMat = new THREE.MeshBasicMaterial({
       color: 0xfff5cb,
       transparent: true,
-      opacity: 0.22,
+      opacity: 0.24,
       fog: false,
       depthWrite: false,
     });
     const haloMesh = new THREE.Mesh(haloGeo, haloMat);
-    haloMesh.position.set(126, 206, 109);
+    haloMesh.position.set(109, 52.5, -256);
     haloMesh.lookAt(0, 0, 0);
     this.skyGroup.add(haloMesh);
 
@@ -581,27 +818,242 @@ export class MinecraftWorld {
     }
   }
 
+  private createCrossedPlanesGeometry(width: number, height: number): THREE.BufferGeometry {
+    const hw = width * 0.5;
+    const d = hw * Math.SQRT1_2;
+    const positions = new Float32Array([
+      // Quad 1 (+45 deg)
+      -d, 0, -d,
+       d, 0,  d,
+       d, height,  d,
+      -d, height, -d,
+      // Quad 2 (-45 deg)
+      -d, 0,  d,
+       d, 0, -d,
+       d, height, -d,
+      -d, height,  d,
+    ]);
+    const uvs = new Float32Array([
+      0, 0, 1, 0, 1, 1, 0, 1,
+      0, 0, 1, 0, 1, 1, 0, 1,
+    ]);
+    const indices = [
+      0, 1, 2, 0, 2, 3,
+      4, 5, 6, 4, 6, 7,
+    ];
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geo.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+    geo.setIndex(indices);
+    geo.computeVertexNormals();
+    return geo;
+  }
+
+  private buildRoadsideLanternsAndFlowers(
+    projects: PortfolioProject[],
+    textures: ReturnType<MinecraftWorld['createPixelTextures']>,
+  ): void {
+    const rng = createRng(7711);
+
+    // 1. Minecraft Lantern Posts along outer lawn border (|X| = 32)
+    const lanternZs = [14, -14, -44, -74, -104, -134, -164, -194];
+    const postSpots: Array<{ x: number; z: number; inwardSign: number }> = [];
+    for (const lz of lanternZs) {
+      postSpots.push({ x: -32, z: lz, inwardSign: 1 });
+      postSpots.push({ x: 32, z: lz, inwardSign: -1 });
+    }
+
+    const baseGeo = new THREE.BoxGeometry(0.62, 0.56, 0.62);
+    const poleGeo = new THREE.BoxGeometry(0.26, 3.3, 0.26);
+    const armGeo = new THREE.BoxGeometry(0.92, 0.22, 0.24);
+    const hookGeo = new THREE.BoxGeometry(0.1, 0.28, 0.1);
+    const lanternGeo = new THREE.BoxGeometry(0.38, 0.44, 0.38);
+
+    const stonePostMat = new THREE.MeshStandardMaterial({
+      map: textures.stoneTex,
+      roughness: 0.92,
+      metalness: 0.02,
+    });
+    const woodPostMat = new THREE.MeshStandardMaterial({
+      map: textures.spruceBark,
+      roughness: 0.94,
+      metalness: 0,
+    });
+    const ironHookMat = new THREE.MeshStandardMaterial({
+      color: 0x343942,
+      roughness: 0.65,
+      metalness: 0.4,
+    });
+    const lanternMat = new THREE.MeshStandardMaterial({
+      map: textures.lanternTex,
+      emissive: new THREE.Color(0xf8e59b),
+      emissiveMap: textures.lanternTex,
+      emissiveIntensity: 1.25,
+      roughness: 0.55,
+      metalness: 0.1,
+    });
+
+    this.disposables.push(
+      baseGeo,
+      poleGeo,
+      armGeo,
+      hookGeo,
+      lanternGeo,
+      stonePostMat,
+      woodPostMat,
+      ironHookMat,
+      lanternMat,
+    );
+
+    const count = postSpots.length;
+    const baseInst = new THREE.InstancedMesh(baseGeo, stonePostMat, count);
+    const poleInst = new THREE.InstancedMesh(poleGeo, woodPostMat, count);
+    const armInst = new THREE.InstancedMesh(armGeo, woodPostMat, count);
+    const hookInst = new THREE.InstancedMesh(hookGeo, ironHookMat, count);
+    const lanternInst = new THREE.InstancedMesh(lanternGeo, lanternMat, count);
+
+    baseInst.name = 'Minecraft_Lantern_Bases';
+    poleInst.name = 'Minecraft_Lantern_Poles';
+    armInst.name = 'Minecraft_Lantern_Arms';
+    hookInst.name = 'Minecraft_Lantern_Hooks';
+    lanternInst.name = 'Minecraft_Lantern_Cores';
+
+    for (const im of [baseInst, poleInst, armInst, hookInst]) {
+      im.castShadow = true;
+      im.receiveShadow = true;
+    }
+
+    this.tmpScale.set(1, 1, 1);
+    for (let i = 0; i < count; i++) {
+      const { x, z, inwardSign } = postSpots[i];
+      this.tmpPos.set(x, 0.28, z);
+      this.tmpMatrix.compose(this.tmpPos, this.tmpQuat, this.tmpScale);
+      baseInst.setMatrixAt(i, this.tmpMatrix);
+
+      this.tmpPos.set(x, 2.21, z);
+      this.tmpMatrix.compose(this.tmpPos, this.tmpQuat, this.tmpScale);
+      poleInst.setMatrixAt(i, this.tmpMatrix);
+
+      this.tmpPos.set(x + inwardSign * 0.36, 3.76, z);
+      this.tmpMatrix.compose(this.tmpPos, this.tmpQuat, this.tmpScale);
+      armInst.setMatrixAt(i, this.tmpMatrix);
+
+      this.tmpPos.set(x + inwardSign * 0.7, 3.51, z);
+      this.tmpMatrix.compose(this.tmpPos, this.tmpQuat, this.tmpScale);
+      hookInst.setMatrixAt(i, this.tmpMatrix);
+
+      this.tmpPos.set(x + inwardSign * 0.7, 3.18, z);
+      this.tmpMatrix.compose(this.tmpPos, this.tmpQuat, this.tmpScale);
+      lanternInst.setMatrixAt(i, this.tmpMatrix);
+    }
+
+    for (const im of [baseInst, poleInst, armInst, hookInst, lanternInst]) {
+      im.instanceMatrix.needsUpdate = true;
+      im.computeBoundingSphere();
+      this.group.add(im);
+    }
+
+    // 2. Crossed-Plane Flowers (Poppy, Dandelion, Cornflower) & Tall Grass in |X| in [24, 37]
+    const flowerPositions: Array<{ x: number; z: number; kind: number; scale: number; yaw: number }> = [];
+    for (let attempt = 0; attempt < 950 && flowerPositions.length < 320; attempt++) {
+      const side = rng() < 0.5 ? -1 : 1;
+      const fx = side * (24.2 + rng() * 12.6); // strictly |X| in [24, 37]
+      const fz = -226 + rng() * 250;
+
+      // Stay well clear of all 7 project monuments/bays and lantern posts
+      let blocked = false;
+      for (const proj of projects) {
+        if (Math.hypot(fx - proj.worldPos.x, fz - proj.worldPos.z) < 10.5) {
+          blocked = true;
+          break;
+        }
+      }
+      if (blocked) continue;
+
+      for (const spot of postSpots) {
+        if (Math.hypot(fx - spot.x, fz - spot.z) < 1.8) {
+          blocked = true;
+          break;
+        }
+      }
+      if (blocked) continue;
+
+      const roll = rng();
+      const kind = roll < 0.42 ? 3 : roll < 0.62 ? 0 : roll < 0.81 ? 1 : 2; // Tall Grass + 3 flowers
+      flowerPositions.push({
+        x: fx,
+        z: fz,
+        kind,
+        scale: kind === 3 ? 0.82 + rng() * 0.34 : 0.74 + rng() * 0.24,
+        yaw: rng() * Math.PI * 0.5,
+      });
+    }
+
+    const crossGeo = this.createCrossedPlanesGeometry(0.84, 0.84);
+    this.disposables.push(crossGeo);
+
+    const floraConfigs: Array<{ name: string; tex: THREE.Texture }> = [
+      { name: 'Minecraft_Poppies', tex: textures.poppyTex },
+      { name: 'Minecraft_Dandelions', tex: textures.dandelionTex },
+      { name: 'Minecraft_Cornflowers', tex: textures.cornflowerTex },
+      { name: 'Minecraft_Tall_Grass', tex: textures.tallGrassTex },
+    ];
+
+    const yAxis = new THREE.Vector3(0, 1, 0);
+    for (let k = 0; k < floraConfigs.length; k++) {
+      const items = flowerPositions.filter((f) => f.kind === k);
+      if (items.length === 0) continue;
+
+      const mat = new THREE.MeshLambertMaterial({
+        map: floraConfigs[k].tex,
+        alphaTest: 0.5,
+        transparent: false,
+        side: THREE.DoubleSide,
+      });
+      this.disposables.push(mat);
+
+      const inst = new THREE.InstancedMesh(crossGeo, mat, items.length);
+      inst.name = floraConfigs[k].name;
+      inst.castShadow = false;
+      inst.receiveShadow = true;
+
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        this.tmpPos.set(item.x, 0.0, item.z);
+        this.tmpQuat.setFromAxisAngle(yAxis, item.yaw);
+        this.tmpScale.set(item.scale, item.scale, item.scale);
+        this.tmpMatrix.compose(this.tmpPos, this.tmpQuat, this.tmpScale);
+        inst.setMatrixAt(i, this.tmpMatrix);
+      }
+      inst.instanceMatrix.needsUpdate = true;
+      inst.computeBoundingSphere();
+      this.group.add(inst);
+    }
+    this.tmpQuat.identity();
+  }
+
   private buildVoxelClouds(): void {
     const rng = createRng(1337);
     let totalBlocks = 0;
 
-    // 28 layered Minecraft cloud clusters drifting across y = 46..54
-    for (let i = 0; i < 28; i++) {
+    // 38 wide, recognizable Minecraft voxel cloud formations at y = 24..34 (1.6..2.2m thick)
+    // clearly visible in both 3rd-person and 1st-person views and fading smoothly into fog
+    for (let i = 0; i < 38; i++) {
       const x = -220 + rng() * 440;
-      const y = 46 + rng() * 8;
-      const z = -320 + rng() * 430;
-      const speed = 1.1 + rng() * 0.9;
+      const y = 24 + rng() * 10;
+      const z = i < 16 ? -280 + rng() * 240 : -320 + rng() * 430;
+      const speed = 1.15 + rng() * 0.95;
 
       const blocks: CloudBlockSpec[] = [];
       const parts = 2 + Math.floor(rng() * 3);
       for (let p = 0; p < parts; p++) {
         const spec: CloudBlockSpec = {
-          dx: (p - parts * 0.5) * (6 + rng() * 5),
-          dy: p === 0 ? 0 : (rng() - 0.5) * 1.4,
-          dz: (rng() - 0.5) * 8,
-          sx: 10 + Math.floor(rng() * 14),
-          sy: 2.6 + Math.floor(rng() * 2) * 1.2,
-          sz: 8 + Math.floor(rng() * 10),
+          dx: (p - parts * 0.5) * (9 + rng() * 7),
+          dy: p === 0 ? 0 : (rng() - 0.5) * 0.5,
+          dz: (rng() - 0.5) * 11,
+          sx: 14 + Math.floor(rng() * 18),
+          sy: 1.6 + rng() * 0.6,
+          sz: 10 + Math.floor(rng() * 12),
         };
         blocks.push(spec);
         totalBlocks += 1;
@@ -610,13 +1062,11 @@ export class MinecraftWorld {
     }
 
     const cloudGeo = new THREE.BoxGeometry(1, 1, 1);
-    const cloudMat = new THREE.MeshStandardMaterial({
-      color: 0xf8fbff,
-      emissive: 0xdbe9ff,
-      emissiveIntensity: 0.42,
-      roughness: 0.95,
-      metalness: 0.0,
-      envMapIntensity: 0.1,
+    const cloudMat = new THREE.MeshLambertMaterial({
+      color: 0xffffff,
+      emissive: 0xdceaff,
+      emissiveIntensity: 0.34,
+      fog: true,
     });
 
     const mesh = new THREE.InstancedMesh(cloudGeo, cloudMat, totalBlocks);
@@ -653,13 +1103,36 @@ export class MinecraftWorld {
     z: number,
     canopyRadius = 0,
   ): boolean {
-    if (Math.abs(x) > 125 || z < -295 || z > 85) return false;
+    if (Math.abs(x) > 135 || z < -305 || z > 95) return false;
     const inForbiddenZone =
       Math.abs(x) - canopyRadius < 38 &&
       z + canopyRadius > -236 &&
       z - canopyRadius < 36;
     if (inForbiddenZone) return false;
     return Math.abs(x) >= 40 || z <= -238 || z >= 38;
+  }
+
+  private hash2D(ix: number, iz: number): number {
+    let n = Math.imul(ix, 374761393) + Math.imul(iz, 668265263);
+    n = (n ^ (n >>> 13)) | 0;
+    n = Math.imul(n, 1274126177);
+    return ((n ^ (n >>> 16)) >>> 0) / 4294967296;
+  }
+
+  private valueNoise2D(x: number, z: number): number {
+    const ix = Math.floor(x);
+    const iz = Math.floor(z);
+    const fx = x - ix;
+    const fz = z - iz;
+    const ux = fx * fx * (3 - 2 * fx);
+    const uz = fz * fz * (3 - 2 * fz);
+
+    const a = this.hash2D(ix, iz);
+    const b = this.hash2D(ix + 1, iz);
+    const c = this.hash2D(ix, iz + 1);
+    const d = this.hash2D(ix + 1, iz + 1);
+
+    return a + (b - a) * ux + (c - a) * uz + (a - b - c + d) * ux * uz;
   }
 
   private buildPerimeterForestAndHills(
@@ -669,71 +1142,126 @@ export class MinecraftWorld {
 
     const oakTrunkBlocks: VoxelPos[] = [];
     const birchTrunkBlocks: VoxelPos[] = [];
+    const spruceTrunkBlocks: VoxelPos[] = [];
     const oakLeafBlocks: VoxelPos[] = [];
     const birchLeafBlocks: VoxelPos[] = [];
-    const hillGrassBlocks: VoxelPos[] = [];
-    const hillDirtBlocks: VoxelPos[] = [];
+    const spruceLeafBlocks: VoxelPos[] = [];
 
-    // 1. Stepped low Minecraft hills strictly in the distant perimeter (|X| >= 48, Z <= -246, Z >= 44)
-    const hillCenters: Array<{ cx: number; cz: number; rx: number; rz: number; maxH: number }> = [];
-    for (let i = 0; i < 36; i++) {
-      const cx = -114 + rng() * 228;
-      const cz = -286 + rng() * 362;
-      const rx = 5 + Math.floor(rng() * 6);
-      const rz = 5 + Math.floor(rng() * 6);
-      const maxH = 2 + Math.floor(rng() * 3); // 2..4 blocks tall
+    const mountainGrassBlocks: VoxelPos[] = [];
+    const mountainDirtBlocks: VoxelPos[] = [];
+    const mountainStoneBlocks: VoxelPos[] = [];
+    const mountainDeepslateBlocks: VoxelPos[] = [];
+    const mountainSnowBlocks: VoxelPos[] = [];
 
-      // Require entire hill footprint to stay well outside the driving zone
-      const safeForHill =
-        Math.abs(cx) - rx >= 46 || cz + rz <= -244 || cz - rz >= 42;
-      if (safeForHill && Math.abs(cx) <= 116 && cz >= -288 && cz <= 78) {
-        hillCenters.push({ cx: Math.round(cx), cz: Math.round(cz), rx, rz, maxH });
+    // 1. Minecraft 1.21+ Jagged Peaks & Meadows mountain ranges (y = 1..32)
+    // Strictly in |X| >= 46..135, Z <= -242..-305, Z >= +44..+95
+    const terrainHeightMap = new Map<string, number>();
+
+    for (let bz = -305; bz <= 95; bz++) {
+      for (let bx = -135; bx <= 135; bx++) {
+        if (Math.abs(bx) < 46 && bz > -242 && bz < 44) continue;
+        if (!this.isAllowedBackgroundCoord(bx, bz, 0)) continue;
+
+        const dxCorr = Math.max(0, Math.abs(bx) - 46);
+        const dzNorth = Math.max(0, -242 - bz);
+        const dzSouth = Math.max(0, bz - 44);
+        const distFromCorridor = Math.max(dxCorr, dzNorth, dzSouth);
+
+        // Domain-warped ridged multifractal for sharp Jagged Peaks silhouettes
+        const warpX = (this.valueNoise2D(bx * 0.025 + 3.1, bz * 0.025 - 7.4) - 0.5) * 14;
+        const warpZ = (this.valueNoise2D(bx * 0.025 - 9.2, bz * 0.025 + 4.8) - 0.5) * 14;
+        const wx = bx + warpX;
+        const wz = bz + warpZ;
+
+        const n1 = 1 - Math.abs(this.valueNoise2D(wx * 0.026 + 11.3, wz * 0.026 - 4.7) * 2 - 1);
+        const n2 = 1 - Math.abs(this.valueNoise2D(wx * 0.062 - 3.1, wz * 0.062 + 9.2) * 2 - 1);
+        const n3 = this.valueNoise2D(bx * 0.14 + 5.5, bz * 0.14 - 2.1);
+
+        const ridge =
+          Math.pow(n1, 1.75) * 0.68 +
+          Math.pow(n2, 1.9) * 0.24 +
+          n3 * 0.08;
+
+        // Carve scenic valleys so ranges form distinct massifs instead of a solid wall
+        const massif = this.valueNoise2D(bx * 0.020 - 6.0, bz * 0.020 + 2.5);
+        const massifWeight = Math.max(0, Math.min(1, (massif - 0.34) / 0.42));
+        if (massifWeight <= 0 && distFromCorridor < 35) continue;
+
+        const ramp = Math.min(1, distFromCorridor / 24);
+        const outerFade = Math.min(
+          1,
+          (136 - Math.abs(bx)) / 12,
+          (bz + 306) / 12,
+          (96 - bz) / 12,
+        );
+
+        const rawH =
+          (ridge - 0.28) * 48 * Math.pow(ramp, 0.85) * (0.28 + 0.72 * massifWeight) * Math.max(0.25, outerFade) +
+          (distFromCorridor < 12 ? massifWeight * 3.0 : 0);
+
+        const topY = Math.min(32, Math.floor(rawH));
+        if (topY >= 1) {
+          terrainHeightMap.set(`${bx},${bz}`, topY);
+        }
       }
     }
 
-    // Track highest ground height per integer (x, z) so trees sit cleanly on hills
-    const terrainHeightMap = new Map<string, number>();
-    for (const hill of hillCenters) {
-      for (let dz = -hill.rz; dz <= hill.rz; dz++) {
-        for (let dx = -hill.rx; dx <= hill.rx; dx++) {
-          const norm = Math.hypot(dx / hill.rx, dz / hill.rz);
-          if (norm > 1) continue;
-          const bx = hill.cx + dx;
-          const bz = hill.cz + dz;
-          if (!this.isAllowedBackgroundCoord(bx, bz, 1)) continue;
+    // Surface-shell culling + geological stratification (Deepslate -> Stone -> Dirt/Grass -> Snow)
+    for (const [key, topY] of terrainHeightMap.entries()) {
+      const commaIdx = key.indexOf(',');
+      const bx = Number(key.slice(0, commaIdx));
+      const bz = Number(key.slice(commaIdx + 1));
 
-          const h = Math.max(1, Math.round((1 - norm * norm) * hill.maxH));
-          const key = `${bx},${bz}`;
-          const prev = terrainHeightMap.get(key) ?? 0;
-          if (h > prev) {
-            terrainHeightMap.set(key, h);
+      const hN = terrainHeightMap.get(`${bx},${bz - 1}`) ?? 0;
+      const hS = terrainHeightMap.get(`${bx},${bz + 1}`) ?? 0;
+      const hW = terrainHeightMap.get(`${bx - 1},${bz}`) ?? 0;
+      const hE = terrainHeightMap.get(`${bx + 1},${bz}`) ?? 0;
+      const minNeighborY = Math.min(hN, hS, hW, hE);
+      const slope = topY - minNeighborY;
+
+      const startY = Math.min(topY - 1, minNeighborY);
+      for (let y = startY; y < topY; y++) {
+        const blockHeight = y + 1;
+        const pos: VoxelPos = { x: bx, y: y + 0.5, z: bz };
+
+        if (y === topY - 1) {
+          if (topY >= 16 || (topY === 15 && slope <= 1 && this.hash2D(bx, bz) < 0.55)) {
+            mountainSnowBlocks.push(pos);
+          } else if (slope >= 4 && topY <= 11) {
+            mountainDeepslateBlocks.push(pos);
+          } else if (topY >= 12 || slope >= 3) {
+            mountainStoneBlocks.push(pos);
+          } else {
+            mountainGrassBlocks.push(pos);
+          }
+        } else {
+          if (topY >= 16 && blockHeight >= topY - 1 && blockHeight >= 16) {
+            mountainSnowBlocks.push(pos);
+          } else if (blockHeight <= 5 || (blockHeight <= 9 && slope >= 3)) {
+            mountainDeepslateBlocks.push(pos);
+          } else if (topY < 12 && slope < 3 && y >= topY - 3) {
+            mountainDirtBlocks.push(pos);
+          } else {
+            mountainStoneBlocks.push(pos);
           }
         }
       }
     }
 
-    for (const [key, topY] of terrainHeightMap.entries()) {
-      const [bxStr, bzStr] = key.split(',');
-      const bx = Number(bxStr);
-      const bz = Number(bzStr);
-      if (!this.isAllowedBackgroundCoord(bx, bz, 0)) continue;
-
-      for (let y = 0; y < topY - 1; y++) {
-        hillDirtBlocks.push({ x: bx, y: y + 0.5, z: bz });
-      }
-      hillGrassBlocks.push({ x: bx, y: topY - 0.5, z: bz });
-    }
-
-    // 2. Distant Oak & Birch voxel trees (strictly outside |X| < 38 && Z in (-236, 36))
-    const treePositions: Array<{ x: number; z: number; isBirch: boolean }> = [];
+    // 2. Distant Spruce (conical pine), Oak & Birch voxel trees (strictly outside |X| < 38 && Z in (-236, 36))
+    const treePositions: Array<{ x: number; z: number; kind: 'oak' | 'birch' | 'spruce' }> = [];
     const minTreeSpacing = 6.2;
 
-    for (let attempt = 0; attempt < 900 && treePositions.length < 155; attempt++) {
-      const tx = Math.round(-120 + rng() * 240);
-      const tz = Math.round(-290 + rng() * 370);
+    for (let attempt = 0; attempt < 1100 && treePositions.length < 185; attempt++) {
+      const tx = Math.round(-126 + rng() * 252);
+      const tz = Math.round(-295 + rng() * 380);
 
       // Account for 2.5m canopy radius so no leaf block ever touches the driving area
       if (!this.isAllowedBackgroundCoord(tx, tz, 2.5)) continue;
+
+      // Grow forest on grassy meadows & foothills, never on high snow/stone cliffs
+      const baseH = terrainHeightMap.get(`${tx},${tz}`) ?? 0;
+      if (baseH > 10) continue;
 
       let tooClose = false;
       for (const existing of treePositions) {
@@ -744,14 +1272,63 @@ export class MinecraftWorld {
       }
       if (tooClose) continue;
 
-      treePositions.push({ x: tx, z: tz, isBirch: rng() < 0.38 });
+      const roll = rng();
+      const kind: 'oak' | 'birch' | 'spruce' =
+        roll < 0.38 ? 'spruce' : roll < 0.68 ? 'birch' : 'oak';
+      treePositions.push({ x: tx, z: tz, kind });
     }
 
     for (const tree of treePositions) {
       const baseH = terrainHeightMap.get(`${tree.x},${tree.z}`) ?? 0;
-      const trunkHeight = tree.isBirch ? 4 + Math.floor(rng() * 3) : 4 + Math.floor(rng() * 2);
-      const trunkTarget = tree.isBirch ? birchTrunkBlocks : oakTrunkBlocks;
-      const leafTarget = tree.isBirch ? birchLeafBlocks : oakLeafBlocks;
+
+      if (tree.kind === 'spruce') {
+        const trunkHeight = 6 + Math.floor(rng() * 4);
+        for (let ty = 0; ty < trunkHeight; ty++) {
+          spruceTrunkBlocks.push({
+            x: tree.x,
+            y: baseH + ty + 0.5,
+            z: tree.z,
+          });
+        }
+
+        // Conical layered Spruce foliage tapering from wide skirt up to single tip
+        const topTipY = baseH + trunkHeight + 1;
+        for (let ly = 0; ly <= trunkHeight - 1; ly++) {
+          const worldY = topTipY - ly;
+          let radius = 0;
+          if (ly === 0) radius = 0;
+          else if (ly === 1) radius = 1;
+          else if (ly === 2) radius = 0;
+          else if (ly === 3) radius = 1;
+          else if (ly === 4) radius = 2;
+          else if (ly === 5) radius = 1;
+          else radius = 2;
+
+          for (let dz = -radius; dz <= radius; dz++) {
+            for (let dx = -radius; dx <= radius; dx++) {
+              if (radius === 1 && Math.abs(dx) === 1 && Math.abs(dz) === 1) continue;
+              if (radius === 2 && Math.abs(dx) + Math.abs(dz) > 2) continue;
+              if (ly >= 2 && dx === 0 && dz === 0) continue;
+
+              const lx = tree.x + dx;
+              const lz = tree.z + dz;
+              if (Math.abs(lx) < 38 && lz > -236 && lz < 36) continue;
+
+              spruceLeafBlocks.push({
+                x: lx,
+                y: worldY + 0.5,
+                z: lz,
+              });
+            }
+          }
+        }
+        continue;
+      }
+
+      const isBirch = tree.kind === 'birch';
+      const trunkHeight = isBirch ? 4 + Math.floor(rng() * 3) : 4 + Math.floor(rng() * 2);
+      const trunkTarget = isBirch ? birchTrunkBlocks : oakTrunkBlocks;
+      const leafTarget = isBirch ? birchLeafBlocks : oakLeafBlocks;
 
       for (let ty = 0; ty < trunkHeight; ty++) {
         trunkTarget.push({
@@ -767,14 +1344,12 @@ export class MinecraftWorld {
         const radius = ly <= 1 ? 2 : 1;
         for (let dz = -radius; dz <= radius; dz++) {
           for (let dx = -radius; dx <= radius; dx++) {
-            // Chamfer corners on outer 5x5 layers and top layer
             if (radius === 2 && Math.abs(dx) === 2 && Math.abs(dz) === 2) {
               if (ly === 1 || rng() < 0.65) continue;
             }
             if (ly === 3 && Math.abs(dx) === 1 && Math.abs(dz) === 1) {
               continue;
             }
-            // Skip interior trunk overlap on lower layers
             if (ly <= 1 && dx === 0 && dz === 0) continue;
 
             const lx = tree.x + dx;
@@ -806,15 +1381,34 @@ export class MinecraftWorld {
       new THREE.MeshStandardMaterial({ map: textures.grassSide, roughness: 0.96, metalness: 0 }),
     ];
     this.disposables.push(...grassBlockMats);
-    this.spawnInstancedVoxels('Hill_Grass_Blocks', voxelGeo, grassBlockMats, hillGrassBlocks, false);
+    this.spawnInstancedVoxels('Mountain_Grass_Blocks', voxelGeo, grassBlockMats, mountainGrassBlocks, false);
 
     const dirtMat = new THREE.MeshStandardMaterial({
       map: textures.dirtTex,
       roughness: 0.96,
       metalness: 0,
     });
-    this.disposables.push(dirtMat);
-    this.spawnInstancedVoxels('Hill_Dirt_Blocks', voxelGeo, dirtMat, hillDirtBlocks, false);
+    const stoneMat = new THREE.MeshStandardMaterial({
+      map: textures.stoneTex,
+      roughness: 0.94,
+      metalness: 0.02,
+    });
+    const deepslateMat = new THREE.MeshStandardMaterial({
+      map: textures.deepslateTex,
+      roughness: 0.95,
+      metalness: 0.02,
+    });
+    const snowMat = new THREE.MeshStandardMaterial({
+      map: textures.snowTex,
+      roughness: 0.9,
+      metalness: 0,
+    });
+    this.disposables.push(dirtMat, stoneMat, deepslateMat, snowMat);
+
+    this.spawnInstancedVoxels('Mountain_Dirt_Blocks', voxelGeo, dirtMat, mountainDirtBlocks, false);
+    this.spawnInstancedVoxels('Mountain_Stone_Blocks', voxelGeo, stoneMat, mountainStoneBlocks, false);
+    this.spawnInstancedVoxels('Mountain_Deepslate_Blocks', voxelGeo, deepslateMat, mountainDeepslateBlocks, false);
+    this.spawnInstancedVoxels('Mountain_Snow_Blocks', voxelGeo, snowMat, mountainSnowBlocks, false);
 
     const oakTrunkMats = [
       new THREE.MeshStandardMaterial({ map: textures.oakBark, roughness: 0.94, metalness: 0 }),
@@ -838,6 +1432,17 @@ export class MinecraftWorld {
     this.disposables.push(...birchTrunkMats);
     this.spawnInstancedVoxels('Birch_Trunks', voxelGeo, birchTrunkMats, birchTrunkBlocks, true);
 
+    const spruceTrunkMats = [
+      new THREE.MeshStandardMaterial({ map: textures.spruceBark, roughness: 0.94, metalness: 0 }),
+      new THREE.MeshStandardMaterial({ map: textures.spruceBark, roughness: 0.94, metalness: 0 }),
+      new THREE.MeshStandardMaterial({ map: textures.spruceTop, roughness: 0.94, metalness: 0 }),
+      new THREE.MeshStandardMaterial({ map: textures.spruceTop, roughness: 0.94, metalness: 0 }),
+      new THREE.MeshStandardMaterial({ map: textures.spruceBark, roughness: 0.94, metalness: 0 }),
+      new THREE.MeshStandardMaterial({ map: textures.spruceBark, roughness: 0.94, metalness: 0 }),
+    ];
+    this.disposables.push(...spruceTrunkMats);
+    this.spawnInstancedVoxels('Spruce_Trunks', voxelGeo, spruceTrunkMats, spruceTrunkBlocks, true);
+
     const oakLeafMat = new THREE.MeshStandardMaterial({
       map: textures.oakLeaves,
       roughness: 0.95,
@@ -848,10 +1453,16 @@ export class MinecraftWorld {
       roughness: 0.95,
       metalness: 0,
     });
-    this.disposables.push(oakLeafMat, birchLeafMat);
+    const spruceLeafMat = new THREE.MeshStandardMaterial({
+      map: textures.spruceLeaves,
+      roughness: 0.95,
+      metalness: 0,
+    });
+    this.disposables.push(oakLeafMat, birchLeafMat, spruceLeafMat);
 
     this.spawnInstancedVoxels('Oak_Leaves', voxelGeo, oakLeafMat, oakLeafBlocks, true);
     this.spawnInstancedVoxels('Birch_Leaves', voxelGeo, birchLeafMat, birchLeafBlocks, true);
+    this.spawnInstancedVoxels('Spruce_Leaves', voxelGeo, spruceLeafMat, spruceLeafBlocks, true);
   }
 
   private spawnInstancedVoxels(

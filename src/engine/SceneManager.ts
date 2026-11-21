@@ -7,6 +7,8 @@ import { MinecraftWorld } from './MinecraftWorld';
 import { ProjectMonuments3D } from './ProjectMonuments3D';
 import { SmokeParticles } from './SmokeParticles';
 
+export type CameraMode = 'chase' | 'firstperson' | 'orbit';
+
 export interface SceneCallbacks {
   onTelemetry: (t: CarTelemetryState) => void;
   onSelectProject: (project: PortfolioProject) => void;
@@ -37,7 +39,7 @@ export class SceneManager {
   private readonly monuments: ProjectMonuments3D;
   private readonly car: CarController;
 
-  private cameraMode: 'chase' | 'orbit' = 'chase';
+  private cameraMode: CameraMode = 'chase';
   private chaseYawOffset = 0;
   private chasePitchOffset = 0.0;
   private threeQuarterBlend = 0;
@@ -53,6 +55,11 @@ export class SceneManager {
   private readonly prevCarPos = new THREE.Vector3();
   private readonly tmpCamTargetPos = new THREE.Vector3();
   private readonly tmpCamTargetLook = new THREE.Vector3();
+  private readonly fpLocalEye = new THREE.Vector3(-0.39, 1.21, 0.04);
+  private readonly fpLocalBaseLookOffset = new THREE.Vector3(0, -0.06, -10.04);
+  private readonly fpLookEuler = new THREE.Euler(0, 0, 0, 'YXZ');
+  private readonly fpWorldEye = new THREE.Vector3();
+  private readonly fpWorldLook = new THREE.Vector3();
 
   private readonly raycaster = new THREE.Raycaster();
   private readonly pointerNdc = new THREE.Vector2();
@@ -85,7 +92,7 @@ export class SceneManager {
 
     this.scene = new THREE.Scene();
 
-    this.camera = new THREE.PerspectiveCamera(44, width / height, 0.15, 480);
+    this.camera = new THREE.PerspectiveCamera(44, width / height, 0.05, 480);
     this.camera.position.copy(this.cameraPosSmooth);
     this.camera.lookAt(this.cameraLookSmooth);
 
@@ -143,6 +150,10 @@ export class SceneManager {
 
     // Daytime Minecraft world (pixel-art grass, stone avenue, paths, sky, clouds, perimeter forest)
     this.minecraft = new MinecraftWorld(this.scene, this.projects);
+
+    // Atmospheric horizon fog & sky-blue background synced for distant mountains & clouds
+    this.scene.fog = new THREE.Fog(0xb7d4fa, 42, 168);
+    this.scene.background = new THREE.Color(0x9bc4f7);
 
     // Subsystems
     this.audio = new CarAudioEngine();
@@ -275,7 +286,7 @@ export class SceneManager {
     this.lastDragX = e.clientX;
     this.lastDragY = e.clientY;
 
-    if (this.cameraMode === 'chase') {
+    if (this.cameraMode === 'chase' || this.cameraMode === 'firstperson') {
       this.isDraggingCamera = true;
     }
   }
@@ -283,18 +294,34 @@ export class SceneManager {
   private handlePointerMove(e: PointerEvent): void {
     const canvas = this.renderer.domElement;
 
-    if (this.isDraggingCamera && this.cameraMode === 'chase') {
+    if (
+      this.isDraggingCamera &&
+      (this.cameraMode === 'chase' || this.cameraMode === 'firstperson')
+    ) {
       const dx = e.clientX - this.lastDragX;
       const dy = e.clientY - this.lastDragY;
       this.lastDragX = e.clientX;
       this.lastDragY = e.clientY;
 
-      this.chaseYawOffset -= dx * 0.0055;
-      this.chasePitchOffset = THREE.MathUtils.clamp(
-        this.chasePitchOffset + dy * 0.004,
-        -0.14,
-        0.52,
-      );
+      if (this.cameraMode === 'firstperson') {
+        this.chaseYawOffset = THREE.MathUtils.clamp(
+          this.chaseYawOffset - dx * 0.0055,
+          -1.15,
+          1.15,
+        );
+        this.chasePitchOffset = THREE.MathUtils.clamp(
+          this.chasePitchOffset - dy * 0.004,
+          -0.30,
+          0.28,
+        );
+      } else {
+        this.chaseYawOffset -= dx * 0.0055;
+        this.chasePitchOffset = THREE.MathUtils.clamp(
+          this.chasePitchOffset + dy * 0.004,
+          -0.14,
+          0.52,
+        );
+      }
       return;
     }
 
@@ -386,6 +413,35 @@ export class SceneManager {
         this.chasePitchOffset,
         recenter,
       );
+    }
+
+    if (this.cameraMode === 'firstperson') {
+      this.threeQuarterBlend = 0;
+      this.car.chassisGroup.updateMatrixWorld(true);
+
+      this.fpWorldEye.copy(this.fpLocalEye);
+      this.car.chassisGroup.localToWorld(this.fpWorldEye);
+
+      const yaw = THREE.MathUtils.clamp(this.chaseYawOffset, -1.15, 1.15);
+      const pitch = THREE.MathUtils.clamp(this.chasePitchOffset, -0.30, 0.28);
+      this.fpLookEuler.set(pitch, yaw, 0, 'YXZ');
+
+      this.fpWorldLook
+        .copy(this.fpLocalBaseLookOffset)
+        .applyEuler(this.fpLookEuler)
+        .add(this.fpLocalEye);
+      this.car.chassisGroup.localToWorld(this.fpWorldLook);
+
+      this.camera.position.copy(this.fpWorldEye);
+      this.camera.lookAt(this.fpWorldLook);
+      this.cameraPosSmooth.copy(this.fpWorldEye);
+      this.cameraLookSmooth.copy(this.fpWorldLook);
+
+      if (Math.abs(this.camera.fov - 64) > 0.05) {
+        this.camera.fov = 64;
+        this.camera.updateProjectionMatrix();
+      }
+      return;
     }
 
     const carYaw = this.car.carGroup.rotation.y;
@@ -553,17 +609,37 @@ export class SceneManager {
     return this.car.isTourActive();
   }
 
-  public setCameraMode(mode: 'chase' | 'orbit'): void {
+  public setCameraMode(mode: CameraMode): void {
     if (this.cameraMode === mode) return;
+    const prevMode = this.cameraMode;
     this.cameraMode = mode;
+    this.isDraggingCamera = false;
+    this.car.setFirstPersonView(mode === 'firstperson');
 
     const carPos = this.car.carGroup.position;
+    const carYaw = this.car.carGroup.rotation.y;
+
     if (mode === 'orbit') {
       this.orbitControls.enabled = true;
       this.orbitControls.target.set(carPos.x, 0.95, carPos.z);
+      if (prevMode === 'firstperson') {
+        this.camera.position.set(
+          carPos.x + Math.sin(carYaw) * 5.75,
+          2.15,
+          carPos.z + Math.cos(carYaw) * 5.75,
+        );
+      }
       this.camera.fov = 44;
       this.camera.updateProjectionMatrix();
       this.orbitControls.update();
+    } else if (mode === 'firstperson') {
+      this.orbitControls.enabled = false;
+      this.chaseYawOffset = 0;
+      this.chasePitchOffset = 0.0;
+      this.threeQuarterBlend = 0;
+      this.camera.fov = 64;
+      this.camera.updateProjectionMatrix();
+      this.updateCamera(0.016, null, Infinity);
     } else {
       this.orbitControls.enabled = false;
       this.cameraPosSmooth.copy(this.camera.position);
@@ -571,6 +647,8 @@ export class SceneManager {
       this.chaseYawOffset = 0;
       this.chasePitchOffset = 0.0;
       this.threeQuarterBlend = 0;
+      this.camera.fov = 44;
+      this.camera.updateProjectionMatrix();
     }
   }
 
@@ -597,6 +675,8 @@ export class SceneManager {
       this.orbitControls.target.set(0, 0.95, 0);
       this.camera.position.set(0, 2.15, 5.75);
       this.orbitControls.update();
+    } else if (this.cameraMode === 'firstperson') {
+      this.updateCamera(0.016, null, Infinity);
     }
   }
 
