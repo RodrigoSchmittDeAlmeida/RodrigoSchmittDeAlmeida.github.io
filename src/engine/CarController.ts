@@ -836,7 +836,8 @@ export class CarController {
         isBraking = true;
         longAccel = 36.0;
       } else if (this.forwardSpeed < maxForwardSpeed) {
-        const powerCurve = 1.0 - 0.55 * Math.pow(this.forwardSpeed / maxForwardSpeed, 1.4);
+        const speedRatio = Math.max(0, this.forwardSpeed) / maxForwardSpeed;
+        const powerCurve = 1.0 - 0.55 * Math.pow(speedRatio, 1.4);
         longAccel = throttleInput * 19.5 * turboMul * Math.max(0.2, powerCurve);
       }
     } else if (throttleInput < -0.05) {
@@ -992,6 +993,28 @@ export class CarController {
       dt,
     });
 
+    // Defensive state guard against non-finite values
+    if (
+      !Number.isFinite(this.forwardSpeed) ||
+      !Number.isFinite(this.lateralSpeed) ||
+      !Number.isFinite(this.heading) ||
+      !Number.isFinite(this.steerAngle) ||
+      !Number.isFinite(this.carGroup.position.x) ||
+      !Number.isFinite(this.carGroup.position.z)
+    ) {
+      this.forwardSpeed = 0;
+      this.lateralSpeed = 0;
+      this.steerAngle = 0;
+      this.velocity.set(0, 0, 0);
+      if (!Number.isFinite(this.heading)) this.heading = 0;
+      if (!Number.isFinite(this.carGroup.position.x)) this.carGroup.position.x = 0;
+      if (!Number.isFinite(this.carGroup.position.z)) this.carGroup.position.z = 0;
+      this.carGroup.rotation.y = this.heading;
+    }
+    if (!Number.isFinite(this.rpm)) {
+      this.rpm = 850;
+    }
+
     const headingDeg =
       (((-this.heading * 180) / Math.PI) % 360 + 360) % 360;
 
@@ -1002,9 +1025,19 @@ export class CarController {
         : 'manual';
     const autopilotTargetId = this.autopilot ? this.autopilot.project.id : null;
 
+    const safeSpeedKmh = Number.isFinite(speedKmh) ? Math.round(speedKmh) : 0;
+    const safeRpm = Number.isFinite(this.rpm) ? Math.round(this.rpm) : 850;
+    const safePosX = Number.isFinite(this.carGroup.position.x)
+      ? Number(this.carGroup.position.x.toFixed(1))
+      : 0;
+    const safePosZ = Number.isFinite(this.carGroup.position.z)
+      ? Number(this.carGroup.position.z.toFixed(1))
+      : 0;
+    const safeHeadingDeg = Number.isFinite(headingDeg) ? Math.round(headingDeg) : 0;
+
     return {
-      speedKmh: Math.round(speedKmh),
-      rpm: Math.round(this.rpm),
+      speedKmh: safeSpeedKmh,
+      rpm: safeRpm,
       gear: this.gear,
       isDrifting,
       isBraking,
@@ -1012,9 +1045,9 @@ export class CarController {
       headlightsOn: this.headlightsOn,
       autopilotMode,
       autopilotTargetId,
-      posX: Number(this.carGroup.position.x.toFixed(1)),
-      posZ: Number(this.carGroup.position.z.toFixed(1)),
-      headingDeg: Math.round(headingDeg),
+      posX: safePosX,
+      posZ: safePosZ,
+      headingDeg: safeHeadingDeg,
       nearestProjectId: nearestProject ? nearestProject.id : null,
       nearestProjectDist: Number.isFinite(nearestDist)
         ? Number(nearestDist.toFixed(1))
@@ -1229,7 +1262,11 @@ export class CarController {
     const entryToParkDist = Math.hypot(ap.park.x - ap.entry.x, ap.park.z - ap.entry.z);
     const effectiveDist =
       ap.stage === 'entry' ? distToEntry + entryToParkDist * 0.55 : distToPark;
-    let targetSpeed = THREE.MathUtils.clamp(Math.sqrt(2 * 4.5 * effectiveDist), 1.8, 13.5);
+    let targetSpeed = THREE.MathUtils.clamp(
+      Math.sqrt(Math.max(0, 2 * 4.5 * effectiveDist)),
+      1.8,
+      13.5,
+    );
 
     if (ap.stage === 'park' && distToPark < 2.2) {
       targetSpeed = Math.min(targetSpeed, Math.max(1.25, distToPark * 1.45));
