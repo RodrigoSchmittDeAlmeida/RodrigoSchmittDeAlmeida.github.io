@@ -225,161 +225,41 @@ body,
 }
 
 /* ============================================================================
-   CENTER STACK — ONBOARDING HINT & PROXIMITY PROMPT
+   TOP STACK — TOPBAR & COMPACT POKÉMON DIALOGUE BOX RIGHT BELOW IT
    ============================================================================ */
-.hud-center-stack {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: space-between;
-  flex: 1;
-  padding: 12px 0;
-  pointer-events: none;
-}
-
-.drive-hint-chip {
-  pointer-events: auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  padding: 6px 12px;
-  border-radius: 999px;
-  background: var(--surface-hud);
-  backdrop-filter: blur(8px);
-  border: 1px solid var(--border-subtle);
-  font-size: 12px;
-  color: var(--text-secondary);
-  transition: opacity 0.22s var(--ease-out-expo), transform 0.22s var(--ease-out-expo);
-}
-
-.drive-hint-chip.is-hidden {
-  opacity: 0;
-  pointer-events: none;
-  transform: translateY(-6px);
-}
-
-.drive-hint-cta {
-  padding: 3px 10px;
-  border-radius: 999px;
-  border: 1px solid var(--accent-border);
-  background: var(--accent-surface);
-  color: var(--accent);
-  font-family: var(--font-sans);
-  font-size: 11.5px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.drive-hint-cta:hover {
-  background: var(--accent);
-  color: var(--accent-ink);
-}
-
-.icon-dismiss-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 999px;
-  border: none;
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-}
-
-.icon-dismiss-btn:hover {
-  background: var(--surface-hover);
-  color: var(--text-primary);
-}
-
-.hud-bottom-prompts {
+.hud-top-stack {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 8px;
   width: 100%;
-  max-width: 820px;
-  padding: 0 12px;
   pointer-events: none;
 }
 
-.proximity-banner {
-  pointer-events: auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 12px;
-  padding: 8px 14px;
-  border-radius: 10px;
-  background: var(--surface-hud);
-  backdrop-filter: blur(10px);
-  border: 1px solid var(--border-strong);
-  cursor: pointer;
-  transform: translateY(8px);
-  opacity: 0;
-  visibility: hidden;
-  transition: opacity 0.22s var(--ease-out-expo), transform 0.22s var(--ease-out-expo),
-    border-color 0.16s var(--ease-out-expo);
-}
-
-.proximity-banner.is-visible {
-  transform: translateY(0);
-  opacity: 1;
-  visibility: visible;
-}
-
-.proximity-banner:hover {
-  border-color: var(--accent-border);
-}
-
-.proximity-key {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 28px;
-  height: 28px;
-  padding: 0 8px;
-  border-radius: 6px;
-  background: var(--accent);
-  color: var(--accent-ink);
-  font-family: var(--font-mono);
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.proximity-title {
-  font-family: var(--font-display);
-  font-size: 13.5px;
-  font-weight: 600;
-  color: var(--text-primary);
-  letter-spacing: -0.01em;
-}
-
-.proximity-sub {
-  font-size: 12px;
-  color: var(--text-secondary);
+.hud-topbar {
+  width: 100%;
 }
 
 /* ============================================================================
-   POKÉMON-STYLE DIALOGUE & SUBTITLE BOX (BOTTOM GAMEPLAY GUIDE)
+   POKÉMON-STYLE DIALOGUE & SUBTITLE BOX (BELOW TOPBAR, CAR VIEW 100% CLEAR)
    ============================================================================ */
 .pokemon-dialog-box {
   pointer-events: auto;
   position: relative;
   width: 100%;
-  max-width: 790px;
-  padding: 10px 14px 9px;
+  max-width: 760px;
+  padding: 8px 13px 7px;
   border-radius: 10px;
-  background: linear-gradient(180deg, rgba(16, 22, 33, 0.94) 0%, rgba(11, 16, 25, 0.96) 100%);
-  border: 2px solid rgba(235, 243, 255, 0.78);
+  background: linear-gradient(180deg, rgba(16, 22, 33, 0.90) 0%, rgba(11, 16, 25, 0.93) 100%);
+  border: 2px solid rgba(235, 243, 255, 0.76);
   box-shadow:
     inset 0 0 0 2px rgba(15, 23, 42, 0.95),
-    inset 0 0 0 3.5px rgba(148, 163, 184, 0.34),
-    0 10px 26px rgba(3, 7, 15, 0.55);
-  backdrop-filter: blur(10px);
+    inset 0 0 0 3.5px rgba(148, 163, 184, 0.32),
+    0 8px 22px rgba(3, 7, 15, 0.45);
+  backdrop-filter: blur(8px);
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 5px;
 }
 
 .pokemon-dialog-header {
@@ -394,7 +274,7 @@ body,
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  padding: 2px 10px 2px 8px;
+  padding: 2px 9px 2px 7px;
   border-radius: 6px;
   background: rgba(241, 245, 249, 0.12);
   border: 1px solid rgba(226, 232, 240, 0.28);
@@ -411,7 +291,7 @@ body,
 
 .pokemon-speaker-name {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 700;
   letter-spacing: 0.04em;
   color: #f8fafc;
@@ -419,7 +299,7 @@ body,
 
 .pokemon-dialog-badge {
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.04em;
   color: rgba(203, 213, 225, 0.85);
@@ -430,24 +310,24 @@ body,
   align-items: flex-end;
   justify-content: space-between;
   gap: 10px;
-  min-height: 38px;
-  padding: 3px 4px 2px;
+  min-height: 32px;
+  padding: 2px 4px 1px;
   cursor: pointer;
 }
 
 .pokemon-dialog-text {
   margin: 0;
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 500;
-  line-height: 1.42;
+  line-height: 1.38;
   color: #f8fafc;
   text-shadow: 0 1px 0 rgba(0, 0, 0, 0.65);
   flex: 1;
 }
 
 .pokemon-dialog-cursor {
-  font-size: 12px;
+  font-size: 11.5px;
   line-height: 1;
   color: #e2e8f0;
   animation: pokemonCursorBounce 0.85s steps(2, end) infinite;
@@ -472,7 +352,7 @@ body,
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding-top: 5px;
+  padding-top: 4px;
   border-top: 1px solid rgba(148, 163, 184, 0.18);
   flex-wrap: wrap;
 }
@@ -487,12 +367,12 @@ body,
 .pokemon-tip-pill {
   display: inline-flex;
   align-items: center;
-  padding: 2px 7px;
+  padding: 1.5px 7px;
   border-radius: 5px;
   background: rgba(15, 23, 42, 0.85);
   border: 1px solid rgba(148, 163, 184, 0.28);
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: 10px;
   font-weight: 500;
   color: #cbd5e1;
 }
@@ -508,13 +388,13 @@ body,
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 3px 9px;
+  padding: 2.5px 9px;
   border-radius: 6px;
   border: 1px solid rgba(226, 232, 240, 0.28);
   background: rgba(30, 41, 59, 0.82);
   color: #f1f5f9;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 600;
   cursor: pointer;
   transition: background-color 0.14s ease, border-color 0.14s ease;
@@ -540,256 +420,47 @@ body,
 }
 
 /* ============================================================================
-   BOTTOM TELEMETRY DOCK
+   BOTTOM-RIGHT CLUSTER — FORZA HORIZON ANALOG SPEEDOMETER & ROUND MINIMAP
    ============================================================================ */
-.bottom-hud {
+.hud-corner-gauges {
+  position: fixed;
+  right: 18px;
+  bottom: 16px;
+  z-index: 12;
+  display: flex;
+  align-items: flex-end;
+  gap: 14px;
+  pointer-events: none;
+}
+
+.forza-speedo-wrap,
+.round-minimap-wrap {
   pointer-events: auto;
-  display: grid;
-  grid-template-columns: auto 1fr auto auto;
-  align-items: center;
-  gap: 16px;
-  padding: 10px 14px;
-  background: var(--surface-hud);
-  backdrop-filter: blur(10px);
-  border: 1px solid var(--border-subtle);
-  border-radius: 12px;
-}
-
-.cluster-speed-gear {
   display: flex;
-  align-items: center;
-  gap: 12px;
-  padding-right: 14px;
-  border-right: 1px solid var(--border-subtle);
-}
-
-.speed-box {
-  display: flex;
-  align-items: baseline;
-  gap: 5px;
-  min-width: 84px;
-}
-
-.speed-value {
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
-  font-size: 30px;
-  font-weight: 600;
-  line-height: 1;
-  letter-spacing: -0.03em;
-  color: var(--text-primary);
-}
-
-.speed-unit {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--text-secondary);
-}
-
-.gear-box {
-  display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  width: 44px;
-  height: 44px;
-  border-radius: 8px;
-  background: var(--surface-recessed);
-  border: 1px solid var(--border-subtle);
-}
-
-.gear-label {
-  font-size: 10px;
-  color: var(--text-muted);
-  line-height: 1.1;
-}
-
-.gear-value {
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
-  font-size: 17px;
-  font-weight: 600;
-  color: var(--accent);
-  line-height: 1.2;
-}
-
-.cluster-telemetry {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 240px;
-}
-
-.telemetry-top-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.rpm-readout {
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--text-primary);
-}
-
-.telemetry-badges {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.pilot-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  border: 1px solid var(--border-subtle);
-  background: var(--surface-recessed);
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--text-secondary);
-}
-
-.pilot-badge.is-auto {
-  border-color: var(--accent-border);
-  background: var(--accent-surface);
-  color: var(--accent);
-}
-
-.playing-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  border: 1px solid var(--border-subtle);
-  background: var(--surface-recessed);
-  font-size: 11px;
-  color: var(--text-secondary);
-}
-
-.playing-dot {
-  width: 6px;
-  height: 6px;
   border-radius: 50%;
-  background: var(--text-muted);
+  filter: drop-shadow(0 10px 24px rgba(2, 6, 14, 0.55));
 }
 
-.playing-badge.is-playing .playing-dot {
-  background: var(--accent);
-}
-
-.playing-badge.is-playing {
-  color: var(--text-primary);
-}
-
-.rpm-bar-track {
-  height: 6px;
-  width: 100%;
-  background: var(--surface-recessed);
-  border-radius: 999px;
-  overflow: hidden;
-  border: 1px solid var(--border-subtle);
-}
-
-.rpm-bar-fill {
-  height: 100%;
-  width: 12%;
-  border-radius: 999px;
-  background: linear-gradient(
-    90deg,
-    oklch(96% 0.006 240) 0%,
-    oklch(76% 0.012 245) 78%,
-    oklch(68% 0.14 22) 82%,
-    oklch(62% 0.16 20) 100%
-  );
-  background-repeat: no-repeat;
-  background-position: left center;
-  background-size: 833.3% 100%;
-  transition: width 0.08s linear;
-}
-
-.coords-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
-  font-size: 11px;
-  color: var(--text-secondary);
-  flex-wrap: wrap;
-}
-
-.model-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.model-status-dot {
-  width: 6px;
-  height: 6px;
+#hud-forza-speedo {
+  width: 184px;
+  height: 184px;
   border-radius: 50%;
-  background: var(--text-muted);
-}
-
-.model-status-dot.is-ready {
-  background: var(--status-ok);
-}
-
-.controls-legend {
-  display: grid;
-  grid-template-columns: repeat(2, auto);
-  gap: 4px 12px;
-  padding: 0 14px;
-  border-left: 1px solid var(--border-subtle);
-  border-right: 1px solid var(--border-subtle);
-  font-size: 11.5px;
-  color: var(--text-secondary);
-}
-
-.legend-item {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  white-space: nowrap;
-}
-
-.kbd {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1px 5px;
-  border-radius: 4px;
-  background: var(--surface-recessed);
-  border: 1px solid var(--border-strong);
-  color: var(--text-primary);
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  font-weight: 500;
-}
-
-.minimap-wrap {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
+  display: block;
 }
 
 #hud-minimap {
-  width: 148px;
-  height: 98px;
-  border-radius: 8px;
-  border: 1px solid var(--border-subtle);
-  background: var(--surface-recessed);
+  width: 164px;
+  height: 164px;
+  border-radius: 50%;
   cursor: pointer;
+  display: block;
+  transition: transform 0.18s var(--ease-out-expo);
+}
+
+#hud-minimap:hover {
+  transform: scale(1.03);
 }
 
 /* ============================================================================
@@ -1437,14 +1108,6 @@ body,
    RESPONSIVE & REDUCED MOTION
    ============================================================================ */
 @media (max-width: 1024px) {
-  .bottom-hud {
-    grid-template-columns: auto 1fr auto;
-  }
-
-  .controls-legend {
-    display: none;
-  }
-
   .modal-body {
     grid-template-columns: 1fr;
     overflow-y: auto;
@@ -1466,12 +1129,20 @@ body,
     padding: 8px;
   }
 
-  .bottom-hud {
-    grid-template-columns: 1fr auto;
+  .hud-corner-gauges {
+    right: 10px;
+    bottom: 10px;
+    gap: 10px;
   }
 
-  .cluster-telemetry {
-    display: none;
+  #hud-forza-speedo {
+    width: 146px;
+    height: 146px;
+  }
+
+  #hud-minimap {
+    width: 132px;
+    height: 132px;
   }
 
   .project-modal {

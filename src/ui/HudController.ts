@@ -305,26 +305,17 @@ export class HudController {
   private pokemonCurrentCharIdx = 0;
   private pokemonIsTyping = false;
 
-  private speedEl!: HTMLElement;
-  private gearEl!: HTMLElement;
-  private rpmReadoutEl!: HTMLElement;
-  private rpmBarEl!: HTMLElement;
-  private pilotBadgeEl!: HTMLElement;
-  private playingBadgeEl!: HTMLElement;
-  private playingLabelEl!: HTMLElement;
-  private coordsEl!: HTMLElement;
-  private modelStatusDotEl!: HTMLElement;
-  private modelStatusLabelEl!: HTMLElement;
   private minimapCanvas!: HTMLCanvasElement;
   private minimapCtx!: CanvasRenderingContext2D;
+  private speedoCanvas!: HTMLCanvasElement;
+  private speedoCtx!: CanvasRenderingContext2D;
+  private smoothGaugeRpm = 850;
+  private smoothGaugeSpeed = 0;
 
   private tourBtn!: HTMLButtonElement;
   private camBtn!: HTMLButtonElement;
   private audioBtn!: HTMLButtonElement;
   private lightsBtn!: HTMLButtonElement;
-  private driveHintChip!: HTMLElement;
-  private proximityBanner!: HTMLElement;
-  private proximityTitleEl!: HTMLElement;
   private pokemonDialogBox!: HTMLElement;
   private pokemonSpeakerEl!: HTMLElement;
   private pokemonBadgeEl!: HTMLElement;
@@ -414,176 +405,105 @@ export class HudController {
       .join('');
 
     this.root.innerHTML = `
-      <header class="hud-topbar">
-        <div class="topbar-title">Rodrigo Schmitt — VW Gol G5</div>
+      <div class="hud-top-stack">
+        <header class="hud-topbar">
+          <div class="topbar-title">Rodrigo Schmitt — VW Gol G5</div>
 
-        <nav class="topbar-stations" aria-label="Estações de projetos">
-          ${stationButtonsHtml}
-        </nav>
+          <nav class="topbar-stations" aria-label="Estações de projetos">
+            ${stationButtonsHtml}
+          </nav>
 
-        <div class="topbar-controls">
-          <button type="button" class="ctrl-btn" id="btn-tour" title="Alternar Tour Automático (T)">
-            ${ICONS.tour}
-            <span>Tour Auto</span>
-          </button>
-          <button type="button" class="ctrl-btn" id="btn-cam-mode" title="Alternar Câmera: 3ª Pessoa → 1ª Pessoa → Órbita (C) | 1ª Pessoa (V)">
-            ${ICONS.camera}
-            <span>3ª Pessoa</span>
-          </button>
-          <button type="button" class="ctrl-btn" id="btn-audio" title="Ativar/Desativar Som do Motor">
-            ${ICONS.audio}
-            <span>Áudio</span>
-          </button>
-          <button type="button" class="ctrl-btn" id="btn-lights" title="Ligar/Desligar Faróis (H)">
-            ${ICONS.lights}
-            <span>Farol</span>
-          </button>
-          <button type="button" class="ctrl-btn" id="btn-reset-car" title="Resetar Posição do Carro (R)">
-            ${ICONS.reset}
-            <span>Reset</span>
-          </button>
-        </div>
-      </header>
+          <div class="topbar-controls">
+            <button type="button" class="ctrl-btn" id="btn-tour" title="Alternar Tour Automático (T)">
+              ${ICONS.tour}
+              <span>Tour Auto</span>
+            </button>
+            <button type="button" class="ctrl-btn" id="btn-cam-mode" title="Alternar Câmera: 3ª Pessoa → 1ª Pessoa → Órbita (C) | 1ª Pessoa (V)">
+              ${ICONS.camera}
+              <span>3ª Pessoa</span>
+            </button>
+            <button type="button" class="ctrl-btn" id="btn-audio" title="Ativar/Desativar Som do Motor">
+              ${ICONS.audio}
+              <span>Áudio</span>
+            </button>
+            <button type="button" class="ctrl-btn" id="btn-lights" title="Ligar/Desligar Faróis (H)">
+              ${ICONS.lights}
+              <span>Farol</span>
+            </button>
+            <button type="button" class="ctrl-btn" id="btn-reset-car" title="Resetar Posição do Carro (R)">
+              ${ICONS.reset}
+              <span>Reset</span>
+            </button>
+          </div>
+        </header>
 
-      <div class="hud-center-stack">
-        <div class="drive-hint-chip" id="drive-hint-chip">
-          <span>Dica: use <strong>WASD</strong> para dirigir, <strong>V</strong> para 1ª Pessoa dentro do Gol G5 ou <strong>T</strong> para Tour Auto</span>
-          <button type="button" class="drive-hint-cta" id="btn-hint-audio">Ativar Áudio</button>
-          <button type="button" class="icon-dismiss-btn" id="btn-hint-dismiss" aria-label="Dispensar dica">
-            ${ICONS.close}
-          </button>
-        </div>
-
-        <div class="hud-bottom-prompts">
-          <div class="proximity-banner" id="proximity-banner" role="button" tabindex="0">
-            <span class="proximity-key">E</span>
-            <div>
-              <div class="proximity-title" id="proximity-title">Estação próxima</div>
-              <div class="proximity-sub">Pressione E ou clique para abrir detalhes</div>
+        <section
+          class="pokemon-dialog-box"
+          id="pokemon-dialog-box"
+          aria-live="polite"
+          aria-label="Legenda e dicas de jogo estilo Pokémon"
+        >
+          <div class="pokemon-dialog-header">
+            <div class="pokemon-speaker-pill">
+              <span class="pokemon-speaker-dot" id="pokemon-speaker-dot" aria-hidden="true"></span>
+              <span class="pokemon-speaker-name" id="pokemon-speaker-name">RODRIGO • GUIA DO GOL G5</span>
             </div>
+            <span class="pokemon-dialog-badge" id="pokemon-dialog-badge">DICA 1/5 • COMO JOGAR</span>
           </div>
 
-          <section
-            class="pokemon-dialog-box"
-            id="pokemon-dialog-box"
-            aria-live="polite"
-            aria-label="Legenda e dicas de jogo estilo Pokémon"
-          >
-            <div class="pokemon-dialog-header">
-              <div class="pokemon-speaker-pill">
-                <span class="pokemon-speaker-dot" id="pokemon-speaker-dot" aria-hidden="true"></span>
-                <span class="pokemon-speaker-name" id="pokemon-speaker-name">RODRIGO • GUIA DO GOL G5</span>
-              </div>
-              <span class="pokemon-dialog-badge" id="pokemon-dialog-badge">DICA 1/5 • COMO JOGAR</span>
-            </div>
+          <div class="pokemon-dialog-body" id="pokemon-dialog-body" title="Clique ou pressione [N] para avançar a fala / próxima dica">
+            <p class="pokemon-dialog-text" id="pokemon-dialog-text"></p>
+            <span class="pokemon-dialog-cursor" aria-hidden="true">▼</span>
+          </div>
 
-            <div class="pokemon-dialog-body" id="pokemon-dialog-body" title="Clique ou pressione [N] para avançar a fala / próxima dica">
-              <p class="pokemon-dialog-text" id="pokemon-dialog-text"></p>
-              <span class="pokemon-dialog-cursor" aria-hidden="true">▼</span>
+          <div class="pokemon-dialog-footer">
+            <div class="pokemon-tips-list" id="pokemon-tips-list"></div>
+            <div class="pokemon-dialog-actions">
+              <button
+                type="button"
+                class="pokemon-action-btn is-primary is-hidden"
+                id="btn-pokemon-open"
+                title="Abrir detalhes e simulador interativo desta estação (Tecla E)"
+              >
+                [E] Abrir Projeto
+              </button>
+              <button
+                type="button"
+                class="pokemon-action-btn"
+                id="btn-pokemon-next"
+                title="Mostrar próxima dica de controles (Tecla N)"
+              >
+                Próxima Dica [N] ▸
+              </button>
             </div>
-
-            <div class="pokemon-dialog-footer">
-              <div class="pokemon-tips-list" id="pokemon-tips-list"></div>
-              <div class="pokemon-dialog-actions">
-                <button
-                  type="button"
-                  class="pokemon-action-btn is-primary is-hidden"
-                  id="btn-pokemon-open"
-                  title="Abrir detalhes e simulador interativo desta estação (Tecla E)"
-                >
-                  [E] Abrir Projeto
-                </button>
-                <button
-                  type="button"
-                  class="pokemon-action-btn"
-                  id="btn-pokemon-next"
-                  title="Mostrar próxima dica de controles (Tecla N)"
-                >
-                  Próxima Dica [N] ▸
-                </button>
-              </div>
-            </div>
-          </section>
-        </div>
+          </div>
+        </section>
       </div>
 
-      <footer class="bottom-hud">
-        <div class="cluster-speed-gear">
-          <div class="speed-box">
-            <span class="speed-value" id="hud-speed">0</span>
-            <span class="speed-unit">km/h</span>
-          </div>
-          <div class="gear-box">
-            <span class="gear-label">Marcha</span>
-            <span class="gear-value" id="hud-gear">N</span>
-          </div>
+      <aside class="hud-corner-gauges" aria-label="Velocímetro Forza Horizon e Minimapa Circular">
+        <div class="forza-speedo-wrap" title="Velocímetro & Conta-Giros VW Gol G5 1.6">
+          <canvas id="hud-forza-speedo" width="184" height="184"></canvas>
         </div>
 
-        <div class="cluster-telemetry">
-          <div class="telemetry-top-row">
-            <span class="rpm-readout" id="hud-rpm">850 RPM</span>
-            <div class="telemetry-badges">
-              <span class="pilot-badge" id="hud-pilot-badge">Manual</span>
-              <span class="playing-badge" id="hud-playing-badge">
-                <span class="playing-dot" aria-hidden="true"></span>
-                <span id="hud-playing-label">Nenhuma demo ativa</span>
-              </span>
-            </div>
-          </div>
-
-          <div class="rpm-bar-track">
-            <div class="rpm-bar-fill" id="hud-rpm-bar"></div>
-          </div>
-
-          <div class="coords-row">
-            <span id="hud-coords">X 0.0m • Z 0.0m • Rumo 0°</span>
-            <span class="model-status">
-              <span class="model-status-dot" id="hud-model-dot"></span>
-              <span id="hud-model-label">Carregando Gol G5...</span>
-            </span>
-          </div>
+        <div class="round-minimap-wrap" title="Radar Circular — Clique em uma estação colorida para dirigir até ela">
+          <canvas id="hud-minimap" width="164" height="164"></canvas>
         </div>
-
-        <div class="controls-legend" aria-label="Atalhos de teclado">
-          <div class="legend-item"><span class="kbd">WASD</span> Dirigir</div>
-          <div class="legend-item"><span class="kbd">Espaço</span> Drift</div>
-          <div class="legend-item"><span class="kbd">T</span> Tour Auto</div>
-          <div class="legend-item"><span class="kbd">C</span> Câmera</div>
-          <div class="legend-item"><span class="kbd">V</span> 1ª Pessoa</div>
-          <div class="legend-item"><span class="kbd">E</span> Abrir Tela</div>
-          <div class="legend-item"><span class="kbd">1–7</span> Estações</div>
-        </div>
-
-        <div class="minimap-wrap">
-          <canvas id="hud-minimap" width="148" height="98" title="Clique em uma estação para dirigir até ela"></canvas>
-        </div>
-      </footer>
+      </aside>
 
       <div class="project-modal-backdrop" id="project-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="modal-project-title">
         <div class="project-modal" id="project-modal-container"></div>
       </div>
     `;
 
-    this.speedEl = this.root.querySelector('#hud-speed') as HTMLElement;
-    this.gearEl = this.root.querySelector('#hud-gear') as HTMLElement;
-    this.rpmReadoutEl = this.root.querySelector('#hud-rpm') as HTMLElement;
-    this.rpmBarEl = this.root.querySelector('#hud-rpm-bar') as HTMLElement;
-    this.pilotBadgeEl = this.root.querySelector('#hud-pilot-badge') as HTMLElement;
-    this.playingBadgeEl = this.root.querySelector('#hud-playing-badge') as HTMLElement;
-    this.playingLabelEl = this.root.querySelector('#hud-playing-label') as HTMLElement;
-    this.coordsEl = this.root.querySelector('#hud-coords') as HTMLElement;
-    this.modelStatusDotEl = this.root.querySelector('#hud-model-dot') as HTMLElement;
-    this.modelStatusLabelEl = this.root.querySelector('#hud-model-label') as HTMLElement;
     this.minimapCanvas = this.root.querySelector('#hud-minimap') as HTMLCanvasElement;
     this.minimapCtx = this.minimapCanvas.getContext('2d')!;
+    this.speedoCanvas = this.root.querySelector('#hud-forza-speedo') as HTMLCanvasElement;
+    this.speedoCtx = this.speedoCanvas.getContext('2d')!;
 
     this.tourBtn = this.root.querySelector('#btn-tour') as HTMLButtonElement;
     this.camBtn = this.root.querySelector('#btn-cam-mode') as HTMLButtonElement;
     this.audioBtn = this.root.querySelector('#btn-audio') as HTMLButtonElement;
     this.lightsBtn = this.root.querySelector('#btn-lights') as HTMLButtonElement;
-    this.driveHintChip = this.root.querySelector('#drive-hint-chip') as HTMLElement;
-    this.proximityBanner = this.root.querySelector('#proximity-banner') as HTMLElement;
-    this.proximityTitleEl = this.root.querySelector('#proximity-title') as HTMLElement;
     this.pokemonDialogBox = this.root.querySelector('#pokemon-dialog-box') as HTMLElement;
     this.pokemonSpeakerEl = this.root.querySelector('#pokemon-speaker-name') as HTMLElement;
     this.pokemonBadgeEl = this.root.querySelector('#pokemon-dialog-badge') as HTMLElement;
@@ -645,10 +565,6 @@ export class HudController {
     };
 
     this.audioBtn.addEventListener('click', toggleAudioHandler);
-    this.root.querySelector('#btn-hint-audio')?.addEventListener('click', toggleAudioHandler);
-    this.root.querySelector('#btn-hint-dismiss')?.addEventListener('click', () => {
-      this.driveHintChip.classList.add('is-hidden');
-    });
 
     this.lightsBtn.addEventListener('click', () => {
       this.headlightsOn = this.callbacks.onToggleHeadlights();
@@ -657,19 +573,6 @@ export class HudController {
 
     this.root.querySelector('#btn-reset-car')?.addEventListener('click', () => {
       this.callbacks.onResetCar();
-    });
-
-    this.proximityBanner.addEventListener('click', () => {
-      if (this.currentProximityProject) {
-        this.openProjectModal(this.currentProximityProject);
-      }
-    });
-
-    this.proximityBanner.addEventListener('keydown', (e) => {
-      if ((e.key === 'Enter' || e.key === ' ') && this.currentProximityProject) {
-        e.preventDefault();
-        this.openProjectModal(this.currentProximityProject);
-      }
     });
 
     this.modalBackdrop.addEventListener('click', (ev) => {
@@ -887,9 +790,6 @@ export class HudController {
 
   private syncAudioUi(): void {
     this.audioBtn.classList.toggle('is-active', this.audioEnabled);
-    if (this.audioEnabled) {
-      this.driveHintChip.classList.add('is-hidden');
-    }
   }
 
   private syncHeadlightsUi(): void {
@@ -897,48 +797,10 @@ export class HudController {
   }
 
   public updateTelemetry(t: CarTelemetryState): void {
-    this.speedEl.textContent = `${Math.round(Math.abs(t.speedKmh))}`;
-    this.gearEl.textContent = t.gear;
-
-    const clampedRpm = Math.max(850, Math.min(6800, Math.round(t.rpm)));
-    this.rpmReadoutEl.textContent = `${clampedRpm} RPM`;
-    const rpmPct = ((clampedRpm - 850) / (6800 - 850)) * 100;
-    const clampedPct = Math.max(5, Math.min(100, rpmPct));
-    this.rpmBarEl.style.width = `${clampedPct.toFixed(1)}%`;
-    this.rpmBarEl.style.backgroundSize = `${(10000 / clampedPct).toFixed(1)}% 100%`;
-
-    this.coordsEl.textContent = `X ${t.posX.toFixed(1)}m • Z ${t.posZ.toFixed(1)}m • Rumo ${Math.round(t.headingDeg)}°`;
-
-    // Pilot mode badge
     const isTour = t.autopilotMode === 'tour';
     if (isTour !== this.tourActive) {
       this.tourActive = isTour;
       this.syncTourUi();
-    }
-
-    if (t.autopilotMode === 'tour') {
-      const target = this.projects.find((p) => p.id === t.autopilotTargetId);
-      this.pilotBadgeEl.textContent = target ? `Tour Auto • ${target.shortName}` : 'Tour Auto';
-      this.pilotBadgeEl.classList.add('is-auto');
-    } else if (t.autopilotMode === 'goto') {
-      const target = this.projects.find((p) => p.id === t.autopilotTargetId);
-      this.pilotBadgeEl.textContent = target ? `Indo até ${target.shortName}` : 'Piloto Auto';
-      this.pilotBadgeEl.classList.add('is-auto');
-    } else {
-      this.pilotBadgeEl.textContent = 'Manual';
-      this.pilotBadgeEl.classList.remove('is-auto');
-    }
-
-    // Active playing 3D screens badge
-    if (t.activePlayingIds.length > 0) {
-      const names = t.activePlayingIds
-        .map((id) => this.projects.find((p) => p.id === id)?.shortName ?? id)
-        .join(', ');
-      this.playingLabelEl.textContent = `Reproduzindo: ${names}`;
-      this.playingBadgeEl.classList.add('is-playing');
-    } else {
-      this.playingLabelEl.textContent = 'Demos em espera';
-      this.playingBadgeEl.classList.remove('is-playing');
     }
 
     if (t.headlightsOn !== this.headlightsOn) {
@@ -946,23 +808,18 @@ export class HudController {
       this.syncHeadlightsUi();
     }
 
-    this.modelStatusDotEl.classList.toggle('is-ready', t.modelLoaded);
-    this.modelStatusLabelEl.textContent = t.modelLoaded
-      ? 'Gol G5 pronto'
-      : 'Carregando Gol G5...';
-
     this.stationBtns.forEach((btn, id) => {
       btn.classList.toggle('is-near', t.nearestProjectId === id);
       btn.classList.toggle('is-target', t.autopilotTargetId === id && t.autopilotMode !== 'manual');
     });
 
+    this.renderForzaSpeedometer(t);
     this.renderMinimap(t);
   }
 
   public setProximity(project: PortfolioProject | null, dist: number): void {
     this.currentProximityProject = project;
     if (!project) {
-      this.proximityBanner.classList.remove('is-visible');
       this.pokemonOpenBtn.classList.add('is-hidden');
       if (this.lastNarratedStationId !== null) {
         this.lastNarratedStationId = null;
@@ -970,8 +827,6 @@ export class HudController {
       return;
     }
 
-    this.proximityTitleEl.textContent = `${project.title} (${dist.toFixed(1)}m)`;
-    this.proximityBanner.classList.add('is-visible');
     this.pokemonOpenBtn.classList.remove('is-hidden');
 
     if (this.lastNarratedStationId !== project.id) {
@@ -989,11 +844,191 @@ export class HudController {
     }
   }
 
+  /**
+   * Renders a Forza Horizon-inspired analog needle tachometer & digital speedometer
+   * in the bottom-right corner alongside the circular minimap.
+   */
+  private renderForzaSpeedometer(t: CarTelemetryState): void {
+    const ctx = this.speedoCtx;
+    const w = this.speedoCanvas.width;
+    const h = this.speedoCanvas.height;
+    const cx = w * 0.5;
+    const cy = h * 0.5;
+    const outerR = Math.min(w, h) * 0.5 - 6;
+
+    const targetRpm = Math.max(0, Math.min(8000, t.rpm));
+    const targetSpeed = Math.max(0, Math.abs(t.speedKmh));
+    this.smoothGaugeRpm += (targetRpm - this.smoothGaugeRpm) * 0.28;
+    this.smoothGaugeSpeed += (targetSpeed - this.smoothGaugeSpeed) * 0.35;
+
+    ctx.clearRect(0, 0, w, h);
+
+    // 1. Dark translucent circular dial backing with crisp metallic bezel
+    const bgGrad = ctx.createRadialGradient(cx, cy, 12, cx, cy, outerR);
+    bgGrad.addColorStop(0.0, 'rgba(13, 18, 28, 0.86)');
+    bgGrad.addColorStop(0.75, 'rgba(10, 14, 22, 0.90)');
+    bgGrad.addColorStop(1.0, 'rgba(6, 9, 15, 0.95)');
+
+    ctx.beginPath();
+    ctx.arc(cx, cy, outerR, 0, Math.PI * 2);
+    ctx.fillStyle = bgGrad;
+    ctx.fill();
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = 'rgba(226, 232, 240, 0.22)';
+    ctx.stroke();
+
+    // Gauge sweep angles: 135 deg (bottom-left) to 405 deg (bottom-right) = 270 deg sweep
+    const startAngle = (135 * Math.PI) / 180;
+    const sweepAngle = (270 * Math.PI) / 180;
+    const endAngle = startAngle + sweepAngle;
+    const maxRpm = 8000;
+    const redlineRpm = 6500;
+    const redlineStartAngle = startAngle + (redlineRpm / maxRpm) * sweepAngle;
+
+    const arcR = outerR - 11;
+
+    // 2. Background RPM track arc
+    ctx.beginPath();
+    ctx.arc(cx, cy, arcR, startAngle, redlineStartAngle);
+    ctx.strokeStyle = 'rgba(148, 163, 184, 0.22)';
+    ctx.lineWidth = 6;
+    ctx.lineCap = 'butt';
+    ctx.stroke();
+
+    // Redline track segment (6.5k .. 8k RPM)
+    ctx.beginPath();
+    ctx.arc(cx, cy, arcR, redlineStartAngle, endAngle);
+    ctx.strokeStyle = 'rgba(220, 76, 76, 0.38)';
+    ctx.lineWidth = 6;
+    ctx.stroke();
+
+    // 3. Active glowing RPM progress arc (follows needle like Forza Horizon)
+    const rpmNorm = Math.max(0, Math.min(1, this.smoothGaugeRpm / maxRpm));
+    const needleAngle = startAngle + rpmNorm * sweepAngle;
+    const isRedline = this.smoothGaugeRpm >= redlineRpm - 150;
+
+    ctx.beginPath();
+    ctx.arc(cx, cy, arcR, startAngle, Math.max(startAngle + 0.03, needleAngle));
+    ctx.strokeStyle = isRedline ? '#ef4444' : '#38bdf8';
+    ctx.lineWidth = 6;
+    ctx.stroke();
+
+    // 4. Major (0..8) & Minor tick marks + numbers
+    ctx.font = '700 10.5px "Space Grotesk", "IBM Plex Mono", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    const totalTicks = 32; // 4 subdivisions per 1000 RPM
+    for (let i = 0; i <= totalTicks; i++) {
+      const frac = i / totalTicks;
+      const ang = startAngle + frac * sweepAngle;
+      const isMajor = i % 4 === 0;
+      const isHalf = i % 2 === 0 && !isMajor;
+      const inRed = frac >= redlineRpm / maxRpm;
+
+      const tickOuter = arcR - 5;
+      const tickInner = isMajor ? tickOuter - 9 : isHalf ? tickOuter - 6 : tickOuter - 3.5;
+
+      const cosA = Math.cos(ang);
+      const sinA = Math.sin(ang);
+
+      ctx.beginPath();
+      ctx.moveTo(cx + cosA * tickOuter, cy + sinA * tickOuter);
+      ctx.lineTo(cx + cosA * tickInner, cy + sinA * tickInner);
+      ctx.strokeStyle = inRed
+        ? isMajor
+          ? '#f87171'
+          : 'rgba(248, 113, 113, 0.55)'
+        : isMajor
+          ? 'rgba(241, 245, 249, 0.92)'
+          : 'rgba(148, 163, 184, 0.45)';
+      ctx.lineWidth = isMajor ? 2 : 1;
+      ctx.stroke();
+
+      if (isMajor) {
+        const rpmDigit = i / 4;
+        const labelR = tickInner - 10;
+        ctx.fillStyle = inRed ? '#f87171' : 'rgba(226, 232, 240, 0.88)';
+        ctx.fillText(String(rpmDigit), cx + cosA * labelR, cy + sinA * labelR);
+      }
+    }
+
+    // "x1000 RPM" micro caption near top
+    ctx.font = '600 8px "IBM Plex Mono", monospace';
+    ctx.fillStyle = 'rgba(148, 163, 184, 0.68)';
+    ctx.fillText('×1000 RPM', cx, cy - 26);
+
+    // 5. Analog Needle (sweeping pointer with counterweight & glowing tip)
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(needleAngle);
+
+    ctx.shadowColor = isRedline ? 'rgba(239, 68, 68, 0.75)' : 'rgba(56, 189, 248, 0.65)';
+    ctx.shadowBlur = 8;
+
+    ctx.beginPath();
+    ctx.moveTo(-12, -2.2);
+    ctx.lineTo(arcR - 7, -1.1);
+    ctx.lineTo(arcR - 2, 0);
+    ctx.lineTo(arcR - 7, 1.1);
+    ctx.lineTo(-12, 2.2);
+    ctx.closePath();
+    ctx.fillStyle = isRedline ? '#ff4d4d' : '#f8fafc';
+    ctx.fill();
+    ctx.restore();
+
+    // Center cap / gear ring
+    ctx.beginPath();
+    ctx.arc(cx, cy, 17, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.96)';
+    ctx.fill();
+    ctx.lineWidth = 1.6;
+    ctx.strokeStyle = isRedline ? '#ef4444' : 'rgba(56, 189, 248, 0.65)';
+    ctx.stroke();
+
+    // Gear indicator inside center hub
+    ctx.font = '700 15px "IBM Plex Mono", monospace';
+    ctx.fillStyle = isRedline ? '#f87171' : '#38bdf8';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(t.gear, cx, cy + 0.5);
+
+    // 6. Digital Speed Readout (bottom window of Forza dial)
+    const speedInt = Math.round(Math.abs(t.speedKmh));
+    ctx.font = '700 27px "Space Grotesk", "IBM Plex Mono", sans-serif';
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(String(speedInt), cx, cy + 44);
+
+    ctx.font = '600 9.5px "IBM Plex Mono", monospace';
+    ctx.fillStyle = 'rgba(148, 163, 184, 0.85)';
+    ctx.fillText('KM/H', cx, cy + 61);
+
+    // Subtle status indicator pill at bottom-center of dial (Auto / Turbo / Drift)
+    let modeTag = '';
+    let modeColor = '#38bdf8';
+    if (t.autopilotMode !== 'manual') {
+      modeTag = t.autopilotMode === 'tour' ? 'TOUR AUTO' : 'AUTO';
+      modeColor = '#2ea86f';
+    } else if (t.isTurbo) {
+      modeTag = 'TURBO';
+      modeColor = '#38bdf8';
+    } else if (t.isDrifting) {
+      modeTag = 'DRIFT';
+      modeColor = '#c4528d';
+    }
+
+    if (modeTag) {
+      ctx.font = '700 8.5px "IBM Plex Mono", monospace';
+      ctx.fillStyle = modeColor;
+      ctx.fillText(modeTag, cx, cy - 39);
+    }
+  }
+
   private worldToMinimap(wx: number, wz: number): { x: number; y: number } {
     const w = this.minimapCanvas.width;
     const h = this.minimapCanvas.height;
-    const padX = 8;
-    const padY = 8;
+    const padX = 24;
+    const padY = 18;
     const nx = (wx + 28) / 56; // X in [-28, 28]
     const ny = (22 - wz) / 254; // Z in [-232, 22]: bottom (+22) -> top (-232)
     return {
@@ -1006,27 +1041,30 @@ export class HudController {
     const ctx = this.minimapCtx;
     const w = this.minimapCanvas.width;
     const h = this.minimapCanvas.height;
+    const cx = w * 0.5;
+    const cy = h * 0.5;
+    const r = Math.min(w, h) * 0.5 - 5;
 
     ctx.clearRect(0, 0, w, h);
 
-    // Subtle coordinate grid
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(10, 15, 24, 0.88)';
+    ctx.fill();
+    ctx.clip();
+
+    // Subtle radar rings
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
     ctx.lineWidth = 1;
-    for (let x = 24; x < w; x += 24) {
+    for (const ringR of [r * 0.35, r * 0.7]) {
       ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, h);
-      ctx.stroke();
-    }
-    for (let y = 20; y < h; y += 20) {
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(w, y);
+      ctx.arc(cx, cy, ringR, 0, Math.PI * 2);
       ctx.stroke();
     }
 
     // Discreet stone-gray bay connectors from X=0 to each station
-    ctx.strokeStyle = 'rgba(148, 158, 170, 0.34)';
+    ctx.strokeStyle = 'rgba(148, 158, 170, 0.36)';
     ctx.lineWidth = 3;
     for (const project of this.projects) {
       if (Math.abs(project.worldPos.x) > 0.5) {
@@ -1042,16 +1080,16 @@ export class HudController {
     // Central stone-gray avenue along X = 0
     const startPt = this.worldToMinimap(0, 18);
     const endPt = this.worldToMinimap(0, -214);
-    ctx.strokeStyle = 'rgba(148, 158, 170, 0.44)';
+    ctx.strokeStyle = 'rgba(148, 158, 170, 0.46)';
     ctx.lineWidth = 6;
-    ctx.lineCap = 'butt';
+    ctx.lineCap = 'round';
     ctx.beginPath();
     ctx.moveTo(startPt.x, startPt.y);
     ctx.lineTo(endPt.x, endPt.y);
     ctx.stroke();
 
     // Subtle center road line
-    ctx.strokeStyle = 'rgba(226, 232, 240, 0.22)';
+    ctx.strokeStyle = 'rgba(226, 232, 240, 0.24)';
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(startPt.x, startPt.y);
@@ -1059,18 +1097,18 @@ export class HudController {
     ctx.stroke();
 
     // 7 uniquely colored station markers + index labels
-    ctx.font = '600 9px "IBM Plex Mono", monospace';
+    ctx.font = '700 9.5px "IBM Plex Mono", monospace';
     ctx.textBaseline = 'middle';
     for (const project of this.projects) {
       const pt = this.worldToMinimap(project.worldPos.x, project.worldPos.z);
       const isFocused =
         t.nearestProjectId === project.id ||
         (t.autopilotMode !== 'manual' && t.autopilotTargetId === project.id);
-      const radius = isFocused ? 5.2 : 4.2;
+      const radius = isFocused ? 5.4 : 4.3;
 
       if (isFocused) {
         ctx.beginPath();
-        ctx.arc(pt.x, pt.y, radius + 2.2, 0, Math.PI * 2);
+        ctx.arc(pt.x, pt.y, radius + 2.4, 0, Math.PI * 2);
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 1.4;
         ctx.stroke();
@@ -1080,7 +1118,7 @@ export class HudController {
       ctx.arc(pt.x, pt.y, radius, 0, Math.PI * 2);
       ctx.fillStyle = project.color;
       ctx.fill();
-      ctx.strokeStyle = isFocused ? '#ffffff' : 'rgba(15, 23, 42, 0.85)';
+      ctx.strokeStyle = isFocused ? '#ffffff' : 'rgba(15, 23, 42, 0.88)';
       ctx.lineWidth = isFocused ? 1.2 : 1;
       ctx.stroke();
 
@@ -1088,7 +1126,7 @@ export class HudController {
       const isLeft = project.worldPos.x < 0;
       ctx.textAlign = isLeft ? 'right' : 'left';
       const labelX = isLeft ? pt.x - (radius + 3.5) : pt.x + (radius + 3.5);
-      ctx.fillStyle = isFocused ? '#ffffff' : 'rgba(226, 232, 240, 0.82)';
+      ctx.fillStyle = isFocused ? '#ffffff' : 'rgba(226, 232, 240, 0.85)';
       ctx.fillText(String(project.index), labelX, pt.y + 0.5);
     }
     ctx.textAlign = 'left';
@@ -1101,10 +1139,10 @@ export class HudController {
     ctx.translate(carPt.x, carPt.y);
     ctx.rotate(rad);
     ctx.beginPath();
-    ctx.moveTo(7, 0);
-    ctx.lineTo(-4.5, -4);
-    ctx.lineTo(-2.2, 0);
-    ctx.lineTo(-4.5, 4);
+    ctx.moveTo(7.5, 0);
+    ctx.lineTo(-4.8, -4.2);
+    ctx.lineTo(-2.3, 0);
+    ctx.lineTo(-4.8, 4.2);
     ctx.closePath();
     ctx.fillStyle = '#ffffff';
     ctx.fill();
@@ -1112,6 +1150,21 @@ export class HudController {
     ctx.lineWidth = 1.2;
     ctx.stroke();
     ctx.restore();
+
+    ctx.restore();
+
+    // Outer circular radar bezel + North indicator
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.lineWidth = 1.8;
+    ctx.strokeStyle = 'rgba(226, 232, 240, 0.26)';
+    ctx.stroke();
+
+    ctx.font = '700 8.5px "IBM Plex Mono", monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = 'rgba(226, 232, 240, 0.72)';
+    ctx.fillText('N', cx, 11);
   }
 
   public openProjectModal(project: PortfolioProject): void {

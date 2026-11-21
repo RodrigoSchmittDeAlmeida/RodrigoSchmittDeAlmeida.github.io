@@ -682,14 +682,14 @@ export class CarController {
     const frontZ = Math.cos(project.worldPos.angleY);
     return {
       entry: new THREE.Vector3(
-        project.worldPos.x + frontX * 13.5,
+        project.worldPos.x + frontX * 14.2,
         0,
-        project.worldPos.z + frontZ * 13.5,
+        project.worldPos.z + frontZ * 14.2,
       ),
       park: new THREE.Vector3(
-        project.worldPos.x + frontX * 7.6,
+        project.worldPos.x + frontX * 8.6,
         0,
-        project.worldPos.z + frontZ * 7.6,
+        project.worldPos.z + frontZ * 8.6,
       ),
       lookAt: new THREE.Vector3(project.worldPos.x, 0, project.worldPos.z),
     };
@@ -709,13 +709,25 @@ export class CarController {
     const fwdZ = -Math.cos(this.heading);
 
     const distToPark = Math.hypot(park.x - pos.x, park.z - pos.z);
+    const distToMon = Math.hypot(project.worldPos.x - pos.x, project.worldPos.z - pos.z);
     const frontX = park.x - lookAt.x;
     const frontZ = park.z - lookAt.z;
     const frontLen = Math.hypot(frontX, frontZ) || 1;
     const carFromMonDotFront =
       ((pos.x - lookAt.x) * frontX + (pos.z - lookAt.z) * frontZ) / frontLen;
 
-    const alreadyInTargetBay = distToPark < 5.5 && carFromMonDotFront > 2.5;
+    // Generous bay comfort zone: if already parked within ~5.5m of park spot (or 6..13m in front of screen), stay put
+    const alreadyInTargetBay =
+      (distToPark < 5.5 || (distToMon < 12.8 && distToMon > 5.0)) &&
+      carFromMonDotFront > 3.2;
+
+    if (alreadyInTargetBay && mode === 'goto') {
+      this.velocity.set(0, 0, 0);
+      this.forwardSpeed = 0;
+      this.lateralSpeed = 0;
+      this.autopilot = null;
+      return;
+    }
 
     const waypoints: THREE.Vector3[] = [];
     let initialReverseTimer = 0;
@@ -749,9 +761,9 @@ export class CarController {
         if (od < nearestObsDist) {
           nearestObsDist = od;
         }
-        if (od > 0.05 && od < 9.5) {
+        if (od > 0.05 && od < 5.4) {
           const frontDot = (fwdX * ox + fwdZ * oz) / od;
-          if (frontDot > 0.25) {
+          if (frontDot > 0.45) {
             obsFrontBlocked = true;
           }
         }
@@ -780,21 +792,21 @@ export class CarController {
         waypoints.push(new THREE.Vector3(0, 0, clampedExitZ));
 
         if (obsFrontBlocked) {
-          initialReverseTimer = 1.0;
+          initialReverseTimer = 0.85;
         }
       }
 
-      // Cruise down unobstructed central avenue (X=0) to target bay Z alignment
-      const cruiseWp = new THREE.Vector3(0, 0, entry.z);
+      // Cruise down unobstructed central avenue (X=0) to target bay Z alignment.
+      // Note: Do NOT push `entry` as a separate intermediate stop before `park`, because
+      // `entry` is ~11m off the central avenue and forces a tight U-turn + back-and-forth maneuver!
+      // Instead, turn smoothly from `(0, entry.z)` directly into `park` along the bay corridor.
+      const cruiseZ = THREE.MathUtils.clamp(entry.z, -198, 20);
+      const cruiseWp = new THREE.Vector3(0, 0, cruiseZ);
       if (
         waypoints.length === 0 ||
-        waypoints[waypoints.length - 1].distanceTo(cruiseWp) > 1.2
+        waypoints[waypoints.length - 1].distanceTo(cruiseWp) > 1.8
       ) {
         waypoints.push(cruiseWp);
-      }
-
-      if (cruiseWp.distanceTo(entry) > 1.2) {
-        waypoints.push(entry.clone());
       }
     }
 
@@ -1245,10 +1257,10 @@ export class CarController {
     const posX = this.carGroup.position.x;
     const posZ = this.carGroup.position.z;
 
-    // Advance sequentially through waypoints (< 2.8m for intermediate, < 0.85m for final park)
+    // Advance sequentially through waypoints (< 3.8m for intermediate avenue points)
     while (ap.waypointIndex < ap.waypoints.length - 1) {
       const wp = ap.waypoints[ap.waypointIndex];
-      if (Math.hypot(wp.x - posX, wp.z - posZ) < 2.8) {
+      if (Math.hypot(wp.x - posX, wp.z - posZ) < 3.8) {
         ap.waypointIndex++;
       } else {
         break;
@@ -1261,34 +1273,10 @@ export class CarController {
     const currentTarget = ap.waypoints[ap.waypointIndex];
     const distToTarget = Math.hypot(currentTarget.x - posX, currentTarget.z - posZ);
     const distToPark = Math.hypot(ap.park.x - posX, ap.park.z - posZ);
-
-    if (isFinalWaypoint && distToTarget < 0.85) {
-      ap.stage = 'braking';
-      return { throttle: 0, steer: 0, handbrake: true, turbo: false };
-    }
-
-    // Compute Pure Pursuit target point (align along entry -> park corridor on final approach)
-    let targetX = currentTarget.x;
-    let targetZ = currentTarget.z;
-    if (isFinalWaypoint) {
-      let corX = ap.park.x - ap.entry.x;
-      let corZ = ap.park.z - ap.entry.z;
-      let corLen = Math.hypot(corX, corZ);
-      if (corLen < 0.2) {
-        corX = ap.lookAt.x - ap.park.x;
-        corZ = ap.lookAt.z - ap.park.z;
-        corLen = Math.hypot(corX, corZ) || 1;
-      }
-      const upstream = distToPark > 1.3 ? THREE.MathUtils.clamp(distToPark * 0.4, 0, 2.0) : 0;
-      targetX = ap.park.x - (corX / corLen) * upstream;
-      targetZ = ap.park.z - (corZ / corLen) * upstream;
-    }
-
-    const dx = targetX - posX;
-    const dz = targetZ - posZ;
-    const distToAim = Math.hypot(dx, dz);
-    const dirX = dx / Math.max(distToAim, 0.001);
-    const dirZ = dz / Math.max(distToAim, 0.001);
+    const distToTargetMon = Math.hypot(
+      ap.project.worldPos.x - posX,
+      ap.project.worldPos.z - posZ,
+    );
 
     // Check if car is cleanly in front of target screen for final bay glide
     const monFrontX = ap.park.x - ap.lookAt.x;
@@ -1297,8 +1285,33 @@ export class CarController {
     const carFromTargetFront =
       ((posX - ap.lookAt.x) * monFrontX + (posZ - ap.lookAt.z) * monFrontZ) /
       monFrontLen;
+
+    // Generous parking tolerance (~3.2m around park point or 6.2..11.6m in front of screen)
+    // so the car glides in once and parks smoothly without reversing back and forth!
+    if (
+      isFinalWaypoint &&
+      (distToTarget < 3.2 ||
+        (distToTargetMon >= 6.2 &&
+          distToTargetMon <= 11.6 &&
+          carFromTargetFront > 4.2 &&
+          distToPark < 4.5))
+    ) {
+      ap.stage = 'braking';
+      return { throttle: 0, steer: 0, handbrake: true, turbo: false };
+    }
+
+    // Compute Pure Pursuit target point
+    const targetX = currentTarget.x;
+    const targetZ = currentTarget.z;
+
+    const dx = targetX - posX;
+    const dz = targetZ - posZ;
+    const distToAim = Math.hypot(dx, dz);
+    const dirX = dx / Math.max(distToAim, 0.001);
+    const dirZ = dz / Math.max(distToAim, 0.001);
+
     const allowFinalParkApproach =
-      isFinalWaypoint && distToPark < 7.0 && carFromTargetFront > 4.0;
+      isFinalWaypoint && distToPark < 12.5 && carFromTargetFront > 2.5;
 
     // Forward predictive probes (2.6m and 5.0m ahead of front axle) + smooth repulsion
     const frontAxleX = posX + this.forwardVec.x * 1.3431;
@@ -1335,16 +1348,16 @@ export class CarController {
         Math.hypot(
           obs.x - ap.project.worldPos.x,
           obs.z - ap.project.worldPos.z,
-        ) < 5.5;
+        ) < 6.0;
       const exemptTarget = allowFinalParkApproach && isTargetMonument;
 
-      const safetyRadius = obs.radius + 1.55;
+      const safetyRadius = obs.radius + 1.35;
       const distNear = Math.hypot(probeNearX - obs.x, probeNearZ - obs.z);
       const distFar = Math.hypot(probeFarX - obs.x, probeFarZ - obs.z);
 
-      if (distNear < safetyRadius) {
+      if (!exemptTarget && distNear < safetyRadius) {
         probeNearHit = true;
-        if (distNear < obs.radius + 1.1) {
+        if (distNear < obs.radius + 0.95) {
           probeNearCritical = true;
         }
       }
@@ -1357,7 +1370,7 @@ export class CarController {
       if (lClear < leftClearance) leftClearance = lClear;
       if (rClear < rightClearance) rightClearance = rClear;
 
-      if (exemptTarget && distToPark < 5.2) {
+      if (exemptTarget) {
         continue;
       }
 
@@ -1427,20 +1440,25 @@ export class CarController {
         Math.abs(this.forwardSpeed) < 2.2);
 
     if (
+      !allowFinalParkApproach &&
       (probeNearCritical || ap.reverseCooldown <= 0) &&
       (probeRequiresReverse ||
         (frontBlocked && Math.abs(this.forwardSpeed) < 1.8) ||
-        (dotForward < -0.55 && distToAim < 7.5))
+        (dotForward < -0.68 && distToAim < 5.5))
     ) {
-      ap.reverseTimer = 1.05;
+      ap.reverseTimer = 0.85;
       ap.stuckTimer = 0;
       return { throttle: -0.62, steer: revSteerChoice, handbrake: false, turbo: false };
     }
 
-    if (Math.abs(this.forwardSpeed) < 0.65) {
+    if (Math.abs(this.forwardSpeed) < 0.55) {
       ap.stuckTimer += dt;
-      if (ap.stuckTimer > 0.95) {
-        ap.reverseTimer = 1.05;
+      if (ap.stuckTimer > 1.25) {
+        if (isFinalWaypoint && distToPark < 6.5) {
+          ap.stage = 'braking';
+          return { throttle: 0, steer: 0, handbrake: true, turbo: false };
+        }
+        ap.reverseTimer = 0.85;
         ap.stuckTimer = 0;
         return { throttle: -0.62, steer: revSteerChoice, handbrake: false, turbo: false };
       }

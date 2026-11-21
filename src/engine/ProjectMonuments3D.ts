@@ -782,8 +782,8 @@ export class ProjectMonuments3D {
 
   /**
    * Computes approach waypoints for autonomous driving:
-   * - entry: (0.4, 0, 13.5) local
-   * - park: (0.4, 0, 7.6) local
+   * - entry: (0.4, 0, 14.2) local
+   * - park: (0.4, 0, 8.6) local (comfortable viewing margin in front of the 3D display)
    * - lookAt: (0.4, 2.55, 0) local
    */
   public getProjectApproachWaypoints(projectId: string): ProjectApproachWaypoints | null {
@@ -791,8 +791,8 @@ export class ProjectMonuments3D {
     if (!entry) return null;
 
     entry.root.updateMatrixWorld(true);
-    const entryPos = new THREE.Vector3(0.4, 0, 13.5).applyMatrix4(entry.root.matrixWorld);
-    const parkPos = new THREE.Vector3(0.4, 0, 7.6).applyMatrix4(entry.root.matrixWorld);
+    const entryPos = new THREE.Vector3(0.4, 0, 14.2).applyMatrix4(entry.root.matrixWorld);
+    const parkPos = new THREE.Vector3(0.4, 0, 8.6).applyMatrix4(entry.root.matrixWorld);
     const lookAtPos = new THREE.Vector3(0.4, 2.55, 0).applyMatrix4(entry.root.matrixWorld);
 
     return {
