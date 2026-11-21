@@ -432,6 +432,15 @@ export class CarController {
           if (!(mat instanceof THREE.MeshStandardMaterial)) return;
           const name = mat.name || '';
 
+          if (mat.map) {
+            mat.map.anisotropy = 8;
+            mat.map.needsUpdate = true;
+          }
+          if (mat.emissiveMap) {
+            mat.emissiveMap.anisotropy = 8;
+            mat.emissiveMap.needsUpdate = true;
+          }
+
           if (name.startsWith('Mat_Headlight_Xenon')) {
             // Preserve GLB mat.color, mat.map, and mat.emissiveMap
             mat.metalness = 0.92;

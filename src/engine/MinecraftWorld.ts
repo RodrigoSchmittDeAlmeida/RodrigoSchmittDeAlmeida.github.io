@@ -69,9 +69,11 @@ export class MinecraftWorld {
 
   private readonly prevBackground: THREE.Color | THREE.Texture | null;
   private readonly prevFog: THREE.Scene['fog'];
+  private readonly maxAnisotropy: number;
 
-  constructor(scene: THREE.Scene, projects: PortfolioProject[]) {
+  constructor(scene: THREE.Scene, projects: PortfolioProject[], maxAnisotropy = 8) {
     this.scene = scene;
+    this.maxAnisotropy = Math.min(16, Math.max(1, maxAnisotropy));
     this.group.name = 'Minecraft_Daylight_World';
 
     this.prevBackground = scene.background;
@@ -95,6 +97,7 @@ export class MinecraftWorld {
     painter: (ctx: CanvasRenderingContext2D, size: number) => void,
     repeatX = 1,
     repeatY = 1,
+    isCutout = false,
   ): THREE.CanvasTexture {
     const canvas = document.createElement('canvas');
     canvas.width = size;
@@ -107,9 +110,11 @@ export class MinecraftWorld {
 
     const tex = new THREE.CanvasTexture(canvas);
     tex.colorSpace = THREE.SRGBColorSpace;
+    // Keep crisp pixel-art blocks up close while mipmapping + anisotropy eliminate distance shimmering & Moiré aliasing
     tex.magFilter = THREE.NearestFilter;
-    tex.minFilter = THREE.NearestFilter;
-    tex.generateMipmaps = false;
+    tex.minFilter = isCutout ? THREE.NearestMipmapLinearFilter : THREE.LinearMipmapLinearFilter;
+    tex.generateMipmaps = true;
+    tex.anisotropy = this.maxAnisotropy;
 
     if (repeatX !== 1 || repeatY !== 1) {
       tex.wrapS = THREE.RepeatWrapping;
@@ -474,61 +479,85 @@ export class MinecraftWorld {
       ctx.fillRect(6, 13, 1, 2);
     };
 
-    const poppyTex = this.makeCanvasTexture(16, (ctx) => {
-      paintStemAndLeaves(ctx);
-      ctx.fillStyle = '#c92323';
-      ctx.fillRect(5, 3, 6, 5);
-      ctx.fillRect(4, 4, 8, 3);
-      ctx.fillStyle = '#ef3e3e';
-      ctx.fillRect(6, 3, 4, 3);
-      ctx.fillRect(5, 4, 2, 2);
-      ctx.fillStyle = '#241a18';
-      ctx.fillRect(7, 5, 2, 2);
-    });
+    const poppyTex = this.makeCanvasTexture(
+      16,
+      (ctx) => {
+        paintStemAndLeaves(ctx);
+        ctx.fillStyle = '#c92323';
+        ctx.fillRect(5, 3, 6, 5);
+        ctx.fillRect(4, 4, 8, 3);
+        ctx.fillStyle = '#ef3e3e';
+        ctx.fillRect(6, 3, 4, 3);
+        ctx.fillRect(5, 4, 2, 2);
+        ctx.fillStyle = '#241a18';
+        ctx.fillRect(7, 5, 2, 2);
+      },
+      1,
+      1,
+      true,
+    );
 
-    const dandelionTex = this.makeCanvasTexture(16, (ctx) => {
-      paintStemAndLeaves(ctx);
-      ctx.fillStyle = '#eab308';
-      ctx.fillRect(5, 4, 6, 4);
-      ctx.fillRect(6, 3, 4, 6);
-      ctx.fillStyle = '#fde047';
-      ctx.fillRect(6, 4, 4, 4);
-      ctx.fillStyle = '#ca8a04';
-      ctx.fillRect(7, 5, 2, 2);
-    });
+    const dandelionTex = this.makeCanvasTexture(
+      16,
+      (ctx) => {
+        paintStemAndLeaves(ctx);
+        ctx.fillStyle = '#eab308';
+        ctx.fillRect(5, 4, 6, 4);
+        ctx.fillRect(6, 3, 4, 6);
+        ctx.fillStyle = '#fde047';
+        ctx.fillRect(6, 4, 4, 4);
+        ctx.fillStyle = '#ca8a04';
+        ctx.fillRect(7, 5, 2, 2);
+      },
+      1,
+      1,
+      true,
+    );
 
-    const cornflowerTex = this.makeCanvasTexture(16, (ctx) => {
-      paintStemAndLeaves(ctx);
-      ctx.fillStyle = '#2563eb';
-      ctx.fillRect(5, 3, 6, 5);
-      ctx.fillRect(4, 5, 8, 2);
-      ctx.fillStyle = '#60a5fa';
-      ctx.fillRect(6, 3, 4, 2);
-      ctx.fillRect(5, 4, 2, 2);
-      ctx.fillRect(9, 4, 2, 2);
-      ctx.fillStyle = '#1e3a8a';
-      ctx.fillRect(7, 5, 2, 2);
-    });
+    const cornflowerTex = this.makeCanvasTexture(
+      16,
+      (ctx) => {
+        paintStemAndLeaves(ctx);
+        ctx.fillStyle = '#2563eb';
+        ctx.fillRect(5, 3, 6, 5);
+        ctx.fillRect(4, 5, 8, 2);
+        ctx.fillStyle = '#60a5fa';
+        ctx.fillRect(6, 3, 4, 2);
+        ctx.fillRect(5, 4, 2, 2);
+        ctx.fillRect(9, 4, 2, 2);
+        ctx.fillStyle = '#1e3a8a';
+        ctx.fillRect(7, 5, 2, 2);
+      },
+      1,
+      1,
+      true,
+    );
 
-    const tallGrassTex = this.makeCanvasTexture(16, (ctx) => {
-      ctx.clearRect(0, 0, 16, 16);
-      const blades: Array<[number, number, number, string]> = [
-        [2, 7, 9, '#4c8628'],
-        [4, 4, 12, '#62a436'],
-        [6, 6, 10, '#538e2c'],
-        [8, 3, 13, '#72b841'],
-        [10, 5, 11, '#5a9931'],
-        [12, 6, 10, '#4a8227'],
-        [14, 8, 8, '#65a838'],
-      ];
-      for (const [bx, topY, h, color] of blades) {
-        ctx.fillStyle = color;
-        ctx.fillRect(bx, topY, 1, h);
-        if (topY > 3) {
-          ctx.fillRect(Math.max(0, bx - 1), topY + 2, 1, Math.max(2, h - 4));
+    const tallGrassTex = this.makeCanvasTexture(
+      16,
+      (ctx) => {
+        ctx.clearRect(0, 0, 16, 16);
+        const blades: Array<[number, number, number, string]> = [
+          [2, 7, 9, '#4c8628'],
+          [4, 4, 12, '#62a436'],
+          [6, 6, 10, '#538e2c'],
+          [8, 3, 13, '#72b841'],
+          [10, 5, 11, '#5a9931'],
+          [12, 6, 10, '#4a8227'],
+          [14, 8, 8, '#65a838'],
+        ];
+        for (const [bx, topY, h, color] of blades) {
+          ctx.fillStyle = color;
+          ctx.fillRect(bx, topY, 1, h);
+          if (topY > 3) {
+            ctx.fillRect(Math.max(0, bx - 1), topY + 2, 1, Math.max(2, h - 4));
+          }
         }
-      }
-    });
+      },
+      1,
+      1,
+      true,
+    );
 
     // 12. Minecraft Lantern Emissive Texture (16x16)
     const lanternTex = this.makeCanvasTexture(16, (ctx) => {

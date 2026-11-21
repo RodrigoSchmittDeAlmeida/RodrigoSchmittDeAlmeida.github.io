@@ -92,7 +92,7 @@ export class SceneManager {
 
     this.scene = new THREE.Scene();
 
-    this.camera = new THREE.PerspectiveCamera(44, width / height, 0.05, 480);
+    this.camera = new THREE.PerspectiveCamera(44, width / height, 0.25, 480);
     this.camera.position.copy(this.cameraPosSmooth);
     this.camera.lookAt(this.cameraLookSmooth);
 
@@ -100,7 +100,7 @@ export class SceneManager {
       antialias: true,
       powerPreference: 'high-performance',
     });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     this.renderer.setSize(width, height);
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -111,6 +111,8 @@ export class SceneManager {
     this.renderer.domElement.style.width = '100%';
     this.renderer.domElement.style.height = '100%';
     container.appendChild(this.renderer.domElement);
+
+    const maxAniso = this.renderer.capabilities.getMaxAnisotropy();
 
     // Automotive daylight studio + sky PMREM dome for crisp black-paint reflections
     this.envRenderTarget = this.buildAutomotiveDaylightEnvironment(this.renderer);
@@ -133,13 +135,13 @@ export class SceneManager {
     this.sunLight = new THREE.DirectionalLight(0xfff8ea, 2.05);
     this.sunLight.position.set(16, 26, 14);
     this.sunLight.castShadow = true;
-    this.sunLight.shadow.mapSize.set(1024, 1024);
+    this.sunLight.shadow.mapSize.set(2048, 2048);
     this.sunLight.shadow.camera.near = 1;
     this.sunLight.shadow.camera.far = 64;
-    this.sunLight.shadow.camera.left = -12;
-    this.sunLight.shadow.camera.right = 12;
-    this.sunLight.shadow.camera.top = 12;
-    this.sunLight.shadow.camera.bottom = -12;
+    this.sunLight.shadow.camera.left = -10;
+    this.sunLight.shadow.camera.right = 10;
+    this.sunLight.shadow.camera.top = 10;
+    this.sunLight.shadow.camera.bottom = -10;
     this.sunLight.shadow.bias = -0.0003;
     this.sunLight.shadow.normalBias = 0.02;
     this.scene.add(this.sunLight, this.sunLight.target);
@@ -149,7 +151,7 @@ export class SceneManager {
     this.scene.add(rimLight);
 
     // Daytime Minecraft world (pixel-art grass, stone avenue, paths, sky, clouds, perimeter forest)
-    this.minecraft = new MinecraftWorld(this.scene, this.projects);
+    this.minecraft = new MinecraftWorld(this.scene, this.projects, maxAniso);
 
     // Atmospheric horizon fog & sky-blue background synced for distant mountains & clouds
     this.scene.fog = new THREE.Fog(0xb7d4fa, 42, 168);
@@ -161,7 +163,7 @@ export class SceneManager {
     this.monuments = new ProjectMonuments3D(
       this.scene,
       this.projects,
-      this.renderer.capabilities.getMaxAnisotropy(),
+      maxAniso,
     );
     this.car = new CarController(
       this.scene,
@@ -381,7 +383,7 @@ export class SceneManager {
     const height = Math.max(1, this.container.clientHeight);
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     this.renderer.setSize(width, height);
   }
 
@@ -630,6 +632,7 @@ export class SceneManager {
           carPos.z + Math.cos(carYaw) * 5.75,
         );
       }
+      this.camera.near = 0.25;
       this.camera.fov = 44;
       this.camera.updateProjectionMatrix();
       this.orbitControls.update();
@@ -638,6 +641,7 @@ export class SceneManager {
       this.chaseYawOffset = 0;
       this.chasePitchOffset = 0.0;
       this.threeQuarterBlend = 0;
+      this.camera.near = 0.05;
       this.camera.fov = 64;
       this.camera.updateProjectionMatrix();
       this.updateCamera(0.016, null, Infinity);
@@ -648,6 +652,7 @@ export class SceneManager {
       this.chaseYawOffset = 0;
       this.chasePitchOffset = 0.0;
       this.threeQuarterBlend = 0;
+      this.camera.near = 0.25;
       this.camera.fov = 44;
       this.camera.updateProjectionMatrix();
     }

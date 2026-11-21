@@ -83,8 +83,10 @@ export class ProjectMonuments3D {
   constructor(scene: THREE.Scene, projects: PortfolioProject[], maxAnisotropy = 8) {
     this.group.name = 'Portfolio_Project_Monuments';
 
-    const deepslateTex = this.createMinecraftDeepslateBricksTexture();
-    const polishedStoneTex = this.createMinecraftPolishedStoneTexture();
+    const clampedAniso = Math.min(16, Math.max(1, maxAnisotropy));
+
+    const deepslateTex = this.createMinecraftDeepslateBricksTexture(clampedAniso);
+    const polishedStoneTex = this.createMinecraftPolishedStoneTexture(clampedAniso);
     this.textures.push(deepslateTex, polishedStoneTex);
 
     const deepslateMat = new THREE.MeshStandardMaterial({
@@ -135,8 +137,6 @@ export class ProjectMonuments3D {
       armZGeo,
     );
 
-    const clampedAniso = Math.min(16, Math.max(1, maxAnisotropy));
-
     projects.forEach((project, idx) => {
       const accentColor = getStationColor(project);
       const root = new THREE.Group();
@@ -185,10 +185,9 @@ export class ProjectMonuments3D {
 
       const screenTexture = new THREE.CanvasTexture(demoRenderer.getCanvas());
       screenTexture.colorSpace = THREE.SRGBColorSpace;
-      screenTexture.anisotropy = Math.min(4, clampedAniso);
-      // Avoid expensive per-frame GPU mipmap chain generation on dynamic canvas uploads
-      screenTexture.generateMipmaps = false;
-      screenTexture.minFilter = THREE.LinearFilter;
+      screenTexture.anisotropy = Math.min(8, clampedAniso);
+      screenTexture.generateMipmaps = true;
+      screenTexture.minFilter = THREE.LinearMipmapLinearFilter;
       screenTexture.magFilter = THREE.LinearFilter;
       screenTexture.needsUpdate = true;
       this.textures.push(screenTexture);
@@ -354,7 +353,7 @@ export class ProjectMonuments3D {
     return geo;
   }
 
-  private createMinecraftDeepslateBricksTexture(): THREE.CanvasTexture {
+  private createMinecraftDeepslateBricksTexture(maxAnisotropy = 8): THREE.CanvasTexture {
     const canvas = document.createElement('canvas');
     canvas.width = 16;
     canvas.height = 16;
@@ -416,13 +415,14 @@ export class ProjectMonuments3D {
     texture.wrapS = THREE.RepeatWrapping;
     texture.wrapT = THREE.RepeatWrapping;
     texture.magFilter = THREE.NearestFilter;
-    texture.minFilter = THREE.NearestFilter;
-    texture.generateMipmaps = false;
+    texture.minFilter = THREE.LinearMipmapLinearFilter;
+    texture.generateMipmaps = true;
+    texture.anisotropy = maxAnisotropy;
     texture.needsUpdate = true;
     return texture;
   }
 
-  private createMinecraftPolishedStoneTexture(): THREE.CanvasTexture {
+  private createMinecraftPolishedStoneTexture(maxAnisotropy = 8): THREE.CanvasTexture {
     const canvas = document.createElement('canvas');
     canvas.width = 16;
     canvas.height = 16;
@@ -473,8 +473,9 @@ export class ProjectMonuments3D {
     texture.wrapS = THREE.RepeatWrapping;
     texture.wrapT = THREE.RepeatWrapping;
     texture.magFilter = THREE.NearestFilter;
-    texture.minFilter = THREE.NearestFilter;
-    texture.generateMipmaps = false;
+    texture.minFilter = THREE.LinearMipmapLinearFilter;
+    texture.generateMipmaps = true;
+    texture.anisotropy = maxAnisotropy;
     texture.needsUpdate = true;
     return texture;
   }

@@ -314,6 +314,10 @@ export class HudController {
   private smoothGaugeRpm = 850;
   private smoothGaugeSpeed = 0;
 
+  private readonly gaugeDpr = Math.min(window.devicePixelRatio || 1, 2);
+  private readonly speedoLogicalSize = 184;
+  private readonly minimapLogicalSize = 164;
+
   private tourBtn!: HTMLButtonElement;
   private camBtn!: HTMLButtonElement;
   private audioBtn!: HTMLButtonElement;
@@ -509,8 +513,13 @@ export class HudController {
     `;
 
     this.minimapCanvas = this.root.querySelector('#hud-minimap') as HTMLCanvasElement;
+    this.minimapCanvas.width = Math.round(this.minimapLogicalSize * this.gaugeDpr);
+    this.minimapCanvas.height = Math.round(this.minimapLogicalSize * this.gaugeDpr);
     this.minimapCtx = this.minimapCanvas.getContext('2d')!;
+
     this.speedoCanvas = this.root.querySelector('#hud-forza-speedo') as HTMLCanvasElement;
+    this.speedoCanvas.width = Math.round(this.speedoLogicalSize * this.gaugeDpr);
+    this.speedoCanvas.height = Math.round(this.speedoLogicalSize * this.gaugeDpr);
     this.speedoCtx = this.speedoCanvas.getContext('2d')!;
 
     this.tourBtn = this.root.querySelector('#btn-tour') as HTMLButtonElement;
@@ -611,10 +620,14 @@ export class HudController {
 
     this.minimapCanvas.addEventListener('click', (ev) => {
       const rect = this.minimapCanvas.getBoundingClientRect();
-      const scaleX = rect.width > 0 ? this.minimapCanvas.width / rect.width : 1;
-      const scaleY = rect.height > 0 ? this.minimapCanvas.height / rect.height : 1;
-      const clickX = (ev.clientX - rect.left) * scaleX;
-      const clickY = (ev.clientY - rect.top) * scaleY;
+      const clickX =
+        rect.width > 0
+          ? ((ev.clientX - rect.left) / rect.width) * this.minimapLogicalSize
+          : 0;
+      const clickY =
+        rect.height > 0
+          ? ((ev.clientY - rect.top) / rect.height) * this.minimapLogicalSize
+          : 0;
 
       let closest: PortfolioProject | null = null;
       let bestDist = 18;
@@ -924,8 +937,8 @@ export class HudController {
    */
   private renderForzaSpeedometer(t: CarTelemetryState): void {
     const ctx = this.speedoCtx;
-    const w = this.speedoCanvas.width;
-    const h = this.speedoCanvas.height;
+    const w = this.speedoLogicalSize;
+    const h = this.speedoLogicalSize;
     const cx = w * 0.5;
     const cy = h * 0.5;
     const outerR = Math.min(w, h) * 0.5 - 6;
@@ -935,6 +948,8 @@ export class HudController {
     this.smoothGaugeRpm += (targetRpm - this.smoothGaugeRpm) * 0.28;
     this.smoothGaugeSpeed += (targetSpeed - this.smoothGaugeSpeed) * 0.35;
 
+    ctx.save();
+    ctx.setTransform(this.gaugeDpr, 0, 0, this.gaugeDpr, 0, 0);
     ctx.clearRect(0, 0, w, h);
 
     // 1. Dark translucent circular dial backing with crisp metallic bezel
@@ -1096,11 +1111,12 @@ export class HudController {
       ctx.fillStyle = modeColor;
       ctx.fillText(modeTag, cx, cy - 39);
     }
+    ctx.restore();
   }
 
   private worldToMinimap(wx: number, wz: number): { x: number; y: number } {
-    const w = this.minimapCanvas.width;
-    const h = this.minimapCanvas.height;
+    const w = this.minimapLogicalSize;
+    const h = this.minimapLogicalSize;
     const padX = 24;
     const padY = 18;
     const nx = (wx + 28) / 56; // X in [-28, 28]
@@ -1113,12 +1129,14 @@ export class HudController {
 
   private renderMinimap(t: CarTelemetryState): void {
     const ctx = this.minimapCtx;
-    const w = this.minimapCanvas.width;
-    const h = this.minimapCanvas.height;
+    const w = this.minimapLogicalSize;
+    const h = this.minimapLogicalSize;
     const cx = w * 0.5;
     const cy = h * 0.5;
     const r = Math.min(w, h) * 0.5 - 5;
 
+    ctx.save();
+    ctx.setTransform(this.gaugeDpr, 0, 0, this.gaugeDpr, 0, 0);
     ctx.clearRect(0, 0, w, h);
 
     ctx.save();
@@ -1239,6 +1257,7 @@ export class HudController {
     ctx.textBaseline = 'middle';
     ctx.fillStyle = 'rgba(226, 232, 240, 0.72)';
     ctx.fillText('N', cx, 11);
+    ctx.restore();
   }
 
   public openProjectModal(project: PortfolioProject): void {
