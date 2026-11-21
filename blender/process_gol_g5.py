@@ -63,8 +63,10 @@ DECIMATE_RATIOS = {
     "hub_rf": 0.55,
     "hub_lr": 0.55,
     "hub_rr": 0.55,
-    "luxfarol": 0.50,
-    "lanternada": 0.35,
+    "luxfarol": 1.0,
+    "lanternada": 0.85,
+    "lanterna": 1.0,
+    "Taillight_Housing_Rear": 1.0,
     "painellux": 0.15,
     "painel": 0.14,
     "steeringwheel": 0.10,
@@ -94,6 +96,172 @@ def set_active_single(obj: bpy.types.Object) -> None:
     bpy.context.view_layer.objects.active = obj
 
 
+def _create_packed_image(name: str, rgba: np.ndarray) -> bpy.types.Image:
+    """Create a 512x512 sRGB Blender image from an HxWx4 float32 array and pack it as PNG."""
+    height, width, channels = rgba.shape
+    assert channels == 4
+    img = bpy.data.images.new(name=name, width=width, height=height, alpha=True)
+    img.colorspace_settings.name = "sRGB"
+    img.pixels.foreach_set(np.clip(rgba, 0.0, 1.0).astype(np.float32).ravel())
+    img.update()
+    img.pack()
+    return img
+
+
+def build_optics_textures() -> dict[str, bpy.types.Image]:
+    """Generate and pack 5 procedural 512x512 PBR textures for VW Gol G5 headlights & taillights."""
+    size = 512
+    lin = np.linspace(0.0, 1.0, size, dtype=np.float32)
+    u, v = np.meshgrid(lin, lin)
+
+    # ------------------------------------------------------------------
+    # 1 & 2. Headlight parabolic reflector + focused xenon emissive map
+    # ------------------------------------------------------------------
+    flute_u = 0.5 + 0.5 * np.cos(u * 2.0 * np.pi * 64.0)
+    flute_v = 0.5 + 0.5 * np.cos(v * 2.0 * np.pi * 48.0)
+    chrome_grid = 0.24 + 0.22 * flute_u + 0.14 * flute_v
+    hl_rgb = np.stack(
+        [chrome_grid * 0.94, chrome_grid * 0.97, chrome_grid * 1.02],
+        axis=-1,
+    ).astype(np.float32)
+    hl_em = np.full((size, size, 3), (0.02, 0.02, 0.024), dtype=np.float32)
+
+    # Primary UV dish (0.242, 0.637) + secondary coverage dish (0.232, 0.845)
+    for cu, cv, rad in ((0.242, 0.637, 0.108), (0.232, 0.845, 0.105)):
+        du = u - cu
+        dv = v - cv
+        r = np.sqrt(du * du + dv * dv) / rad
+        theta = np.arctan2(dv, du)
+
+        mask_ring = (r >= 0.80) & (r <= 1.05)
+        hl_rgb[mask_ring] = (0.032, 0.035, 0.044)
+
+        bowl = (r >= 0.23) & (r < 0.80)
+        rings = 0.5 + 0.5 * np.cos(r * np.pi * 16.0)
+        facets = 0.5 + 0.5 * np.cos(theta * 24.0)
+        bowl_val = np.clip(0.36 + 0.28 * rings + 0.16 * facets + 0.08 * (1.0 - r), 0.0, 0.92)
+        hl_rgb[bowl, 0] = bowl_val[bowl] * 0.91
+        hl_rgb[bowl, 1] = bowl_val[bowl] * 0.96
+        hl_rgb[bowl, 2] = bowl_val[bowl] * 1.04
+
+        shroud = (r >= 0.17) & (r < 0.23)
+        hl_rgb[shroud] = (0.045, 0.050, 0.064)
+
+        core = r < 0.17
+        core_falloff = np.clip(1.0 - (r / 0.17) ** 2, 0.0, 1.0)
+        hl_rgb[core, 0] = 0.36 + 0.36 * core_falloff[core]
+        hl_rgb[core, 1] = 0.58 + 0.28 * core_falloff[core]
+        hl_rgb[core, 2] = 0.88 + 0.10 * core_falloff[core]
+
+        # Focused xenon emitter core + subtle projector halo
+        glow = np.exp(-((r / 0.17) ** 2) * 2.1) + 0.22 * np.exp(-(((r - 0.34) / 0.09) ** 2))
+        glow *= (r <= 0.95).astype(np.float32)
+        hl_em[..., 0] = np.maximum(hl_em[..., 0], 0.02 + 0.84 * glow)
+        hl_em[..., 1] = np.maximum(hl_em[..., 1], 0.02 + 0.92 * glow)
+        hl_em[..., 2] = np.maximum(hl_em[..., 2], 0.024 + 0.98 * glow)
+
+    # Outer corner indicator reflector cell (0.85, 0.40)
+    du_c, dv_c = u - 0.85, v - 0.40
+    r_c = np.sqrt(du_c * du_c + dv_c * dv_c) / 0.10
+    theta_c = np.arctan2(dv_c, du_c)
+    c_mask = (r_c >= 0.78) & (r_c <= 1.02)
+    hl_rgb[c_mask] = (0.035, 0.038, 0.045)
+    c_bowl = r_c < 0.78
+    c_val = 0.38 + 0.26 * (0.5 + 0.5 * np.cos(r_c * np.pi * 12.0)) + 0.14 * (0.5 + 0.5 * np.cos(theta_c * 18.0))
+    hl_rgb[c_bowl, 0] = c_val[c_bowl] * 0.94
+    hl_rgb[c_bowl, 1] = c_val[c_bowl] * 0.96
+    hl_rgb[c_bowl, 2] = c_val[c_bowl] * 1.00
+    c_glow = 0.25 * np.exp(-((r_c / 0.24) ** 2)) * (r_c < 0.75).astype(np.float32)
+    hl_em[..., 0] = np.maximum(hl_em[..., 0], 0.02 + 0.95 * c_glow)
+    hl_em[..., 1] = np.maximum(hl_em[..., 1], 0.02 + 0.70 * c_glow)
+    hl_em[..., 2] = np.maximum(hl_em[..., 2], 0.024 + 0.28 * c_glow)
+
+    alpha_one = np.ones((size, size, 1), dtype=np.float32)
+    tex_hl_refl = _create_packed_image("Tex_Headlight_Reflector", np.concatenate([hl_rgb, alpha_one], axis=-1))
+    tex_hl_em = _create_packed_image("Tex_Headlight_Emissive", np.concatenate([hl_em, alpha_one], axis=-1))
+
+    # ------------------------------------------------------------------
+    # 3 & 4. Taillight ruby Fresnel lens + Gol G5 twin rings + emissive
+    # ------------------------------------------------------------------
+    h_ribs = 0.5 + 0.5 * np.cos(v * 2.0 * np.pi * 60.0)
+    v_prism = 0.5 + 0.5 * np.cos(u * 2.0 * np.pi * 90.0)
+    ruby_rgb = np.stack(
+        [
+            0.28 + 0.26 * h_ribs + 0.10 * v_prism,
+            0.010 + 0.016 * h_ribs,
+            0.014 + 0.020 * h_ribs,
+        ],
+        axis=-1,
+    ).astype(np.float32)
+
+    ruby_em = np.stack(
+        [
+            0.04 + 0.12 * h_ribs,
+            0.002 + 0.006 * h_ribs,
+            0.002 + 0.006 * h_ribs,
+        ],
+        axis=-1,
+    ).astype(np.float32)
+
+    # Characteristic Gol G5 twin concentric reflector rings in brakelight UV region
+    for cu, cv, rad in ((0.685, 0.887, 0.048), (0.795, 0.887, 0.048)):
+        du = u - cu
+        dv = v - cv
+        r = np.sqrt(du * du + dv * dv) / rad
+        theta = np.arctan2(dv, du)
+
+        outer_dark = (r >= 0.84) & (r <= 1.02)
+        ruby_rgb[outer_dark] = (0.14, 0.006, 0.008)
+
+        ring = (r >= 0.50) & (r < 0.84)
+        ring_fac = 0.62 + 0.24 * (0.5 + 0.5 * np.cos(theta * 20.0))
+        ruby_rgb[ring, 0] = ring_fac[ring]
+        ruby_rgb[ring, 1] = 0.030 * ring_fac[ring]
+        ruby_rgb[ring, 2] = 0.028 * ring_fac[ring]
+
+        sep = (r >= 0.34) & (r < 0.50)
+        ruby_rgb[sep] = (0.18, 0.008, 0.010)
+
+        bull = r < 0.34
+        bull_val = 0.66 + 0.16 * (0.5 + 0.5 * np.cos(r * np.pi * 10.0))
+        ruby_rgb[bull, 0] = bull_val[bull]
+        ruby_rgb[bull, 1] = 0.028 * bull_val[bull]
+        ruby_rgb[bull, 2] = 0.026 * bull_val[bull]
+
+        ring_glow = np.exp(-(((r - 0.67) / 0.15) ** 2)) + 0.85 * np.exp(-((r / 0.26) ** 2))
+        ring_glow *= (r <= 0.96).astype(np.float32)
+        ruby_em[..., 0] = np.maximum(ruby_em[..., 0], 0.06 + 0.90 * ring_glow)
+        ruby_em[..., 1] = np.maximum(ruby_em[..., 1], 0.004 + 0.05 * ring_glow)
+        ruby_em[..., 2] = np.maximum(ruby_em[..., 2], 0.004 + 0.03 * ring_glow)
+
+    # High-mount brake light bar accent (brakelight_m covers U=[0.57, 0.89], V=[0.77, 0.99])
+    m_bar = (u >= 0.56) & (u <= 0.90) & (v >= 0.77) & (v <= 0.83)
+    ruby_em[m_bar, 0] = np.maximum(ruby_em[m_bar, 0], 0.72)
+    ruby_em[m_bar, 1] = np.maximum(ruby_em[m_bar, 1], 0.04)
+
+    tex_tl_ruby = _create_packed_image("Tex_Taillight_Ruby", np.concatenate([ruby_rgb, alpha_one], axis=-1))
+    tex_tl_em = _create_packed_image("Tex_Taillight_Emissive", np.concatenate([ruby_em, alpha_one], axis=-1))
+
+    # ------------------------------------------------------------------
+    # 5. Crystal / smoked-silver multifaceted reflector for reverse & turn
+    # ------------------------------------------------------------------
+    d1 = np.abs(np.sin((u + v) * np.pi * 48.0))
+    d2 = np.abs(np.sin((u - v) * np.pi * 48.0))
+    h_flute = 0.5 + 0.5 * np.cos(v * 2.0 * np.pi * 72.0)
+    facets = 0.45 * (d1 * d2) + 0.35 * np.maximum(d1, d2) + 0.20 * h_flute
+    crys_val = 0.34 + 0.52 * facets
+    crys_rgb = np.stack([crys_val * 0.94, crys_val * 0.96, crys_val * 1.00], axis=-1).astype(np.float32)
+    tex_tl_crystal = _create_packed_image("Tex_Taillight_Crystal", np.concatenate([crys_rgb, alpha_one], axis=-1))
+
+    return {
+        "Tex_Headlight_Reflector": tex_hl_refl,
+        "Tex_Headlight_Emissive": tex_hl_em,
+        "Tex_Taillight_Ruby": tex_tl_ruby,
+        "Tex_Taillight_Emissive": tex_tl_em,
+        "Tex_Taillight_Crystal": tex_tl_crystal,
+    }
+
+
 def create_principled_material(
     name: str,
     base_color: tuple[float, float, float, float],
@@ -106,8 +274,10 @@ def create_principled_material(
     emission_strength: float = 0.0,
     ior: float = 1.45,
     is_blend: bool = False,
+    base_color_image: bpy.types.Image | None = None,
+    emission_image: bpy.types.Image | None = None,
 ) -> bpy.types.Material:
-    """Create a clean Principled BSDF PBR material with zero external texture dependencies."""
+    """Create a clean Principled BSDF PBR material with optional packed procedural images."""
     mat = bpy.data.materials.new(name=name)
     if mat.node_tree is None:
         mat.use_nodes = True
@@ -128,11 +298,24 @@ def create_principled_material(
     bsdf.inputs["Alpha"].default_value = alpha
     bsdf.inputs["IOR"].default_value = ior
 
+    if base_color_image is not None:
+        tex_base = nodes.new("ShaderNodeTexImage")
+        tex_base.location = (-320, 120)
+        tex_base.image = base_color_image
+        tex_base.extension = "REPEAT"
+        links.new(tex_base.outputs["Color"], bsdf.inputs["Base Color"])
+
     if "Coat Weight" in bsdf.inputs:
         bsdf.inputs["Coat Weight"].default_value = coat_weight
     if "Coat Roughness" in bsdf.inputs:
         bsdf.inputs["Coat Roughness"].default_value = coat_roughness
-    if emission_color is not None and "Emission Color" in bsdf.inputs:
+    if emission_image is not None and "Emission Color" in bsdf.inputs:
+        tex_em = nodes.new("ShaderNodeTexImage")
+        tex_em.location = (-320, -160)
+        tex_em.image = emission_image
+        tex_em.extension = "REPEAT"
+        links.new(tex_em.outputs["Color"], bsdf.inputs["Emission Color"])
+    elif emission_color is not None and "Emission Color" in bsdf.inputs:
         bsdf.inputs["Emission Color"].default_value = emission_color
     if "Emission Strength" in bsdf.inputs:
         bsdf.inputs["Emission Strength"].default_value = emission_strength
@@ -152,7 +335,8 @@ def create_principled_material(
 
 
 def build_pbr_palette() -> dict[str, bpy.types.Material]:
-    """Build the 12 realistic VW Gol G5 Preto PBR materials (non-chrome deep black paint)."""
+    """Build the realistic VW Gol G5 Preto PBR materials including packed procedural optical textures."""
+    tex = build_optics_textures()
     return {
         "Mat_CarPaint_Black": create_principled_material(
             "Mat_CarPaint_Black",
@@ -190,12 +374,28 @@ def build_pbr_palette() -> dict[str, bpy.types.Material]:
         ),
         "Mat_Headlight_Lens": create_principled_material(
             "Mat_Headlight_Lens",
-            base_color=(0.08, 0.10, 0.14, 1.0),
+            base_color=(0.95, 0.98, 1.0, 1.0),
             metallic=0.0,
-            roughness=0.05,
-            alpha=0.32,
-            ior=1.48,
+            roughness=0.025,
+            alpha=0.14,
+            coat_weight=1.0,
+            coat_roughness=0.02,
+            ior=1.50,
             is_blend=True,
+        ),
+        "Mat_Headlight_Mask_Black": create_principled_material(
+            "Mat_Headlight_Mask_Black",
+            base_color=(0.012, 0.013, 0.016, 1.0),
+            metallic=0.18,
+            roughness=0.18,
+            coat_weight=0.75,
+            coat_roughness=0.08,
+        ),
+        "Mat_Chrome_Reflector": create_principled_material(
+            "Mat_Chrome_Reflector",
+            base_color=(0.88, 0.90, 0.94, 1.0),
+            metallic=0.96,
+            roughness=0.08,
         ),
         "Mat_Brake_Caliper_Red": create_principled_material(
             "Mat_Brake_Caliper_Red",
@@ -217,27 +417,52 @@ def build_pbr_palette() -> dict[str, bpy.types.Material]:
         ),
         "Mat_Headlight_Xenon": create_principled_material(
             "Mat_Headlight_Xenon",
-            base_color=(0.95, 0.97, 1.0, 1.0),
-            metallic=0.10,
-            roughness=0.10,
-            emission_color=(0.95, 0.97, 1.0, 1.0),
-            emission_strength=1.1,
+            base_color=(0.78, 0.82, 0.88, 1.0),
+            metallic=0.86,
+            roughness=0.14,
+            coat_weight=0.5,
+            emission_strength=0.35,
+            base_color_image=tex["Tex_Headlight_Reflector"],
+            emission_image=tex["Tex_Headlight_Emissive"],
         ),
         "Mat_Brakelight_Red": create_principled_material(
             "Mat_Brakelight_Red",
             base_color=(0.55, 0.02, 0.02, 1.0),
-            metallic=0.10,
-            roughness=0.15,
-            emission_color=(0.9, 0.05, 0.03, 1.0),
-            emission_strength=0.85,
+            metallic=0.18,
+            roughness=0.10,
+            coat_weight=1.0,
+            coat_roughness=0.03,
+            emission_strength=0.45,
+            base_color_image=tex["Tex_Taillight_Ruby"],
+            emission_image=tex["Tex_Taillight_Emissive"],
+        ),
+        "Mat_Taillight_Ruby_Lens": create_principled_material(
+            "Mat_Taillight_Ruby_Lens",
+            base_color=(0.48, 0.012, 0.016, 1.0),
+            metallic=0.06,
+            roughness=0.04,
+            alpha=0.84,
+            coat_weight=1.0,
+            coat_roughness=0.02,
+            is_blend=True,
+        ),
+        "Mat_Taillight_Crystal_Chamber": create_principled_material(
+            "Mat_Taillight_Crystal_Chamber",
+            base_color=(0.78, 0.80, 0.84, 1.0),
+            metallic=0.60,
+            roughness=0.12,
+            coat_weight=0.85,
+            base_color_image=tex["Tex_Taillight_Crystal"],
         ),
         "Mat_Reversing_Light": create_principled_material(
             "Mat_Reversing_Light",
             base_color=(0.85, 0.88, 0.92, 1.0),
-            metallic=0.10,
-            roughness=0.12,
+            metallic=0.35,
+            roughness=0.08,
+            coat_weight=0.90,
             emission_color=(0.95, 0.98, 1.0, 1.0),
-            emission_strength=0.25,
+            emission_strength=0.15,
+            base_color_image=tex["Tex_Taillight_Crystal"],
         ),
     }
 
@@ -245,8 +470,27 @@ def build_pbr_palette() -> dict[str, bpy.types.Material]:
 def resolve_material_for_slot(
     obj_name: str, orig_mat_name: str, palette: dict[str, bpy.types.Material]
 ) -> bpy.types.Material:
-    """Map an imported Sollumz material slot to the clean PBR palette, isolating emblems and lights."""
+    """Map an imported Sollumz material slot to the clean PBR palette, isolating emblems and optics."""
     base = orig_mat_name.strip()
+
+    # Dedicated headlight & taillight optical assemblies
+    if obj_name == "luxfarol":
+        return palette["Mat_Headlight_Lens"]
+    if obj_name == "lanternada":
+        return palette["Mat_Headlight_Mask_Black"]
+    if obj_name == "lanterna":
+        return palette["Mat_Chrome_Reflector"]
+    if obj_name in ("reversinglight_l", "reversinglight_r"):
+        return palette["Mat_Reversing_Light"]
+    if obj_name == "Taillight_Housing_Rear":
+        if base == "vermelgo":
+            return palette["Mat_Taillight_Ruby_Lens"]
+        if base == "gol01":
+            return palette["Mat_CarPaint_Black"]
+        if base.startswith("vehiclelights128"):
+            return palette["Mat_Taillight_Crystal_Chamber"]
+    if obj_name in ("brakelight_l", "brakelight_r") and base.startswith("vehicle_generic_glasswindows2"):
+        return palette["Mat_Taillight_Ruby_Lens"]
 
     # Exclusive light materials per emitter mesh so runtime light toggles never leak
     if base.startswith("vehiclelights128"):
@@ -254,14 +498,9 @@ def resolve_material_for_slot(
             return palette["Mat_Headlight_Xenon"]
         if obj_name in ("brakelight_l", "brakelight_m", "brakelight_r"):
             return palette["Mat_Brakelight_Red"]
-        if obj_name in ("reversinglight_l", "reversinglight_r"):
-            return palette["Mat_Reversing_Light"]
         if obj_name in ("door_dside_f", "door_pside_f"):
             return palette["Mat_Chrome_Trim"]
         return palette["Mat_Trim_Black"]
-
-    if obj_name == "luxfarol":
-        return palette["Mat_Headlight_Lens"]
 
     # Primary painted body panels -> deep non-chrome black car paint
     if base in ("vehicle_generic_smallspecmap [PRIMARY]", "gol01"):
@@ -328,7 +567,7 @@ def merge_split_vertices(obj: bpy.types.Object, dist: float = 0.0001) -> None:
     obj.data.update()
 
 
-def apply_decimate(obj: bpy.types.Object, ratio: float) -> None:
+def apply_decimate(obj: bpy.types.Object, ratio: float, smooth_angle_deg: float = 38.0) -> None:
     """Apply Collapse Decimate modifier and recompute angle-based smooth normals."""
     set_active_single(obj)
     if ratio < 0.999:
@@ -340,8 +579,55 @@ def apply_decimate(obj: bpy.types.Object, ratio: float) -> None:
 
     if obj.data.has_custom_normals:
         bpy.ops.mesh.customdata_custom_splitnormals_clear()
-    bpy.ops.object.shade_smooth_by_angle(angle=math.radians(38.0))
+    bpy.ops.object.shade_smooth_by_angle(angle=math.radians(smooth_angle_deg))
     obj.data.validate(verbose=False)
+
+
+def separate_taillight_housing_from_painel() -> bpy.types.Object | None:
+    """Separate rear taillight housing polygons (world Y < -1.50) from 'painel' into 'Taillight_Housing_Rear'."""
+    painel = bpy.data.objects.get("painel")
+    if painel is None:
+        return None
+
+    set_active_single(painel)
+    bpy.ops.object.mode_set(mode="EDIT")
+    bpy.ops.mesh.select_all(action="DESELECT")
+    bpy.ops.object.mode_set(mode="OBJECT")
+
+    selected_count = 0
+    for poly in painel.data.polygons:
+        wc = painel.matrix_world @ poly.center
+        if wc.y < -1.50:
+            poly.select = True
+            selected_count += 1
+
+    if selected_count == 0:
+        return None
+
+    bpy.ops.object.mode_set(mode="EDIT")
+    bpy.ops.mesh.separate(type="SELECTED")
+    bpy.ops.object.mode_set(mode="OBJECT")
+
+    separated = [o for o in bpy.context.selected_objects if o != painel]
+    if not separated:
+        return None
+
+    housing = separated[0]
+    housing.name = "Taillight_Housing_Rear"
+    housing.data.name = "Taillight_Housing_Rear"
+
+    for mod in list(housing.modifiers):
+        if mod.type == "DECIMATE":
+            housing.modifiers.remove(mod)
+
+    used_indices = {p.material_index for p in housing.data.polygons}
+    for idx in range(len(housing.material_slots) - 1, -1, -1):
+        if idx not in used_indices:
+            set_active_single(housing)
+            housing.active_material_index = idx
+            bpy.ops.object.material_slot_remove()
+
+    return housing
 
 
 def decimate_boot_preserving_exterior(boot_obj: bpy.types.Object) -> None:
@@ -857,7 +1143,13 @@ def main() -> None:
                 obj.modifiers.remove(mod)
         obj.vertex_groups.clear()
 
-    # 3. Build clean PBR palette and replace Sollumz/DDS materials per slot
+    # Extract rear taillight housings from 'painel' (world Y < -1.50) before material/decimation pass
+    taillight_housing = separate_taillight_housing_from_painel()
+    if taillight_housing is not None:
+        print(f"Separated {taillight_housing.name}: {len(taillight_housing.data.polygons)} polys")
+        mesh_objects = [o for o in bpy.data.objects if o.type == "MESH"]
+
+    # 3. Build clean PBR palette (with packed procedural optical textures) and replace Sollumz/DDS materials
     palette = build_pbr_palette()
     for obj in mesh_objects:
         for slot in obj.material_slots:
@@ -885,12 +1177,13 @@ def main() -> None:
                         if wc.y <= 0.55 and wc.z < 0.30:
                             poly.material_index = trim_idx
 
-    # Purge unused Sollumz materials and zero-size DDS images
+    # Purge unused Sollumz materials and zero-size DDS images (keep packed procedural textures!)
     for mat in list(bpy.data.materials):
         if mat.users == 0 and mat.name not in palette:
             bpy.data.materials.remove(mat)
     for img in list(bpy.data.images):
-        bpy.data.images.remove(img)
+        if img.size[0] == 0 or img.size[1] == 0:
+            bpy.data.images.remove(img)
 
     # 4. Strip unused attributes/extra UVs, merge split seam vertices, and decimate heavy meshes
     for obj in mesh_objects:
@@ -898,6 +1191,8 @@ def main() -> None:
         merge_split_vertices(obj, dist=0.0001)
         if obj.name == "boot":
             decimate_boot_preserving_exterior(obj)
+        elif obj.name == "Taillight_Housing_Rear":
+            apply_decimate(obj, 1.0, smooth_angle_deg=35.0)
         elif obj.name == "wheel_lf.child":
             apply_decimate(obj, 0.25)
         elif obj.name in DECIMATE_RATIOS:
@@ -956,11 +1251,13 @@ def main() -> None:
             min_z, max_z = min(min_z, wc.z), max(max_z, wc.z)
 
     empty_images = [img.name for img in bpy.data.images if img.size[0] == 0 or img.size[1] == 0]
+    packed_images = [f"{img.name}({img.size[0]}x{img.size[1]})" for img in bpy.data.images if img.packed_file]
     print(f"=== CAR EXPORT SUMMARY ===")
     print(f"Objects count: {len(car_objects)}")
     for o in sorted(car_objects, key=lambda x: len(x.data.polygons), reverse=True):
         print(f"  {o.name}: {len(o.data.polygons)} polys")
     print(f"Total polygons: {total_polys}")
+    print(f"Packed procedural images ({len(packed_images)}): {packed_images}")
     print(f"Wheel FL loc: {[round(v, 4) for v in bpy.data.objects['Wheel_FL'].location]}")
     print(f"Wheel FR loc: {[round(v, 4) for v in bpy.data.objects['Wheel_FR'].location]} rot={[round(v, 4) for v in bpy.data.objects['Wheel_FR'].rotation_euler]}")
     print(f"Wheel RL loc: {[round(v, 4) for v in bpy.data.objects['Wheel_RL'].location]}")
@@ -971,6 +1268,7 @@ def main() -> None:
     assert total_polys <= 120000, f"Polygon budget exceeded: {total_polys} > 120000"
     assert abs(min_z) < 0.01, f"Vehicle not grounded at Z=0: Z_min={min_z}"
     assert not empty_images, f"Empty images still exist: {empty_images}"
+    assert len(packed_images) == 5, f"Expected 5 packed procedural images, got {packed_images}"
 
     # 7. Export clean GLB without Draco
     os.makedirs(os.path.dirname(GLB_OUT), exist_ok=True)
@@ -982,6 +1280,7 @@ def main() -> None:
     bpy.ops.export_scene.gltf(
         filepath=GLB_OUT,
         export_format="GLB",
+        export_image_format="AUTO",
         use_selection=True,
         export_apply=True,
         export_draco_mesh_compression_enable=False,

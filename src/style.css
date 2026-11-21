@@ -247,8 +247,8 @@ body,
   pointer-events: auto;
   position: relative;
   width: 100%;
-  max-width: 760px;
-  padding: 8px 13px 7px;
+  max-width: 660px;
+  padding: 7px 12px 6px;
   border-radius: 10px;
   background: linear-gradient(180deg, rgba(16, 22, 33, 0.90) 0%, rgba(11, 16, 25, 0.93) 100%);
   border: 2px solid rgba(235, 243, 255, 0.76);
@@ -262,12 +262,45 @@ body,
   gap: 5px;
 }
 
+.pokemon-dialog-box.is-dismissed {
+  display: none;
+}
+
 .pokemon-dialog-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+.pokemon-header-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.pokemon-close-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border-radius: 6px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(15, 23, 42, 0.72);
+  color: rgba(203, 213, 225, 0.85);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background-color 0.14s ease, border-color 0.14s ease, color 0.14s ease;
+}
+
+.pokemon-close-btn:hover {
+  background: rgba(241, 245, 249, 0.18);
+  border-color: rgba(248, 250, 252, 0.55);
+  color: #ffffff;
 }
 
 .pokemon-speaker-pill {
@@ -333,6 +366,10 @@ body,
   animation: pokemonCursorBounce 0.85s steps(2, end) infinite;
   flex-shrink: 0;
   padding-bottom: 2px;
+}
+
+.pokemon-dialog-box:not(.is-typing) .pokemon-dialog-cursor {
+  display: none;
 }
 
 @keyframes pokemonCursorBounce {

@@ -51,6 +51,7 @@ interface AutopilotState {
   stuckTimer: number;
   reverseTimer: number;
   reverseCooldown: number;
+  smoothSteer?: number;
 }
 
 const WHEEL_RADIUS = 0.3516;
@@ -432,12 +433,33 @@ export class CarController {
           const name = mat.name || '';
 
           if (name.startsWith('Mat_Headlight_Xenon')) {
-            mat.emissive = new THREE.Color(0xdbeafe);
-            mat.emissiveIntensity = this.headlightsOn ? 2.2 : 0.12;
+            // Preserve GLB mat.color, mat.map, and mat.emissiveMap
+            mat.emissive = new THREE.Color(0xedf4ff);
+            mat.emissiveIntensity = this.headlightsOn ? 2.4 : 0.06;
+            mat.envMapIntensity = 1.25;
             headlights.add(mat);
+          } else if (name.startsWith('Mat_Headlight_Lens')) {
+            // Crystal-clear outer headlight lens (excluded from glassMats so 1st-person view stays clear)
+            mat.transparent = true;
+            mat.opacity = 0.16;
+            mat.roughness = 0.03;
+            mat.envMapIntensity = 1.15;
+          } else if (name.startsWith('Mat_Headlight_Mask_Black')) {
+            mat.envMapIntensity = 0.85;
+          } else if (name.startsWith('Mat_Chrome_Reflector')) {
+            mat.envMapIntensity = 1.35;
+          } else if (name.startsWith('Mat_Taillight_Ruby_Lens')) {
+            // Translucent ruby taillight lens (excluded from glassMats)
+            mat.transparent = true;
+            mat.opacity = 0.84;
+            mat.roughness = 0.04;
+            mat.envMapIntensity = 1.1;
+          } else if (name.startsWith('Mat_Taillight_Crystal_Chamber')) {
+            mat.envMapIntensity = 1.25;
           } else if (name.startsWith('Mat_Brakelight_Red')) {
-            mat.emissive = new THREE.Color(0xff1414);
-            mat.emissiveIntensity = 0.45;
+            // Preserve GLB mat.map and mat.emissiveMap
+            mat.emissive = new THREE.Color(0xff1818);
+            mat.emissiveIntensity = 0.32;
             brakelights.add(mat);
           } else if (name.startsWith('Mat_Reversing_Light')) {
             mat.emissive = new THREE.Color(0xf8fafc);
@@ -673,7 +695,7 @@ export class CarController {
     this.spotRight.visible = this.headlightsOn;
 
     for (const mat of this.headlightMats) {
-      mat.emissiveIntensity = this.headlightsOn ? 2.2 : 0.12;
+      mat.emissiveIntensity = this.headlightsOn ? 2.4 : 0.06;
     }
   }
 
@@ -693,6 +715,101 @@ export class CarController {
       ),
       lookAt: new THREE.Vector3(project.worldPos.x, 0, project.worldPos.z),
     };
+  }
+
+  private buildSmoothAutopilotPath(
+    controlPoints: THREE.Vector3[],
+    targetProjectId: string,
+    obstacles: MonumentObstacle[],
+  ): THREE.Vector3[] {
+    if (controlPoints.length === 0) return [];
+
+    const finalPt = controlPoints[controlPoints.length - 1].clone();
+    finalPt.y = 0;
+
+    const dedupedPoints: THREE.Vector3[] = [];
+    for (let i = 0; i < controlPoints.length; i++) {
+      const pt = controlPoints[i].clone();
+      pt.y = 0;
+
+      if (i === 0) {
+        dedupedPoints.push(pt);
+        continue;
+      }
+
+      const prev = dedupedPoints[dedupedPoints.length - 1];
+      if (i === controlPoints.length - 1) {
+        if (prev.distanceTo(pt) < 0.8 && dedupedPoints.length > 1) {
+          dedupedPoints[dedupedPoints.length - 1] = pt;
+        } else if (prev.distanceTo(pt) >= 0.4) {
+          dedupedPoints.push(pt);
+        }
+        continue;
+      }
+
+      if (pt.distanceTo(prev) >= 2.0 && pt.distanceTo(finalPt) >= 2.0) {
+        dedupedPoints.push(pt);
+      }
+    }
+
+    if (dedupedPoints.length < 2) {
+      return [finalPt];
+    }
+
+    const curve = new THREE.CatmullRomCurve3(
+      dedupedPoints,
+      false,
+      'centripetal',
+      0.45,
+    );
+    const totalLength = curve.getLength();
+    const numSegments = Math.max(2, Math.ceil(totalLength / 2.2));
+    const sampled = curve.getPoints(numSegments);
+
+    const targetProject =
+      this.sortedProjects.find((p) => p.id === targetProjectId) ?? null;
+    const sampledPark = sampled[sampled.length - 1];
+    sampledPark.y = 0;
+
+    for (let i = 0; i < sampled.length; i++) {
+      const pt = sampled[i];
+      pt.y = 0;
+      if (i === 0 || i === sampled.length - 1) continue;
+
+      const distToBayPark = Math.hypot(
+        pt.x - sampledPark.x,
+        pt.z - sampledPark.z,
+      );
+
+      for (const obs of obstacles) {
+        const isTargetMonument =
+          targetProject !== null &&
+          Math.hypot(
+            obs.x - targetProject.worldPos.x,
+            obs.z - targetProject.worldPos.z,
+          ) < 6.0;
+        if (isTargetMonument && distToBayPark < 6.5) {
+          continue;
+        }
+
+        const minClearance = obs.radius + 2.6;
+        const dx = pt.x - obs.x;
+        const dz = pt.z - obs.z;
+        const dist = Math.hypot(dx, dz);
+        if (dist < minClearance) {
+          if (dist > 0.01) {
+            const nx = dx / dist;
+            const nz = dz / dist;
+            pt.x = obs.x + nx * minClearance;
+            pt.z = obs.z + nz * minClearance;
+          } else {
+            pt.x = obs.x + minClearance;
+          }
+        }
+      }
+    }
+
+    return sampled;
   }
 
   private startAutopilotTo(project: PortfolioProject, mode: 'goto' | 'tour'): void {
@@ -729,7 +846,16 @@ export class CarController {
       return;
     }
 
-    const waypoints: THREE.Vector3[] = [];
+    const obsList: MonumentObstacle[] =
+      this.lastObstacles.length > 0
+        ? this.lastObstacles
+        : this.sortedProjects.map((p) => ({
+            x: p.worldPos.x,
+            z: p.worldPos.z,
+            radius: 2.35,
+          }));
+
+    const controlPoints: THREE.Vector3[] = [new THREE.Vector3(pos.x, 0, pos.z)];
     let initialReverseTimer = 0;
 
     if (!alreadyInTargetBay) {
@@ -745,14 +871,6 @@ export class CarController {
 
       let nearestObsDist = nearestMonDist;
       let obsFrontBlocked = false;
-      const obsList: MonumentObstacle[] =
-        this.lastObstacles.length > 0
-          ? this.lastObstacles
-          : this.sortedProjects.map((p) => ({
-              x: p.worldPos.x,
-              z: p.worldPos.z,
-              radius: 2.35,
-            }));
 
       for (const obs of obsList) {
         const ox = obs.x - pos.x;
@@ -769,51 +887,103 @@ export class CarController {
         }
       }
 
+      const bayJoinZ = THREE.MathUtils.clamp(entry.z + 10, -198, 22);
+      const headingTowardNegZ = bayJoinZ <= pos.z;
       const offCentralAvenue = Math.abs(pos.x) > 5.5 || pos.z < -195;
       const nearAnyMonument = Math.min(nearestMonDist, nearestObsDist) < 12.5;
+
+      const isDirectBayGlide =
+        distToPark <= 12.5 &&
+        Math.abs(pos.x - entry.x) <= 6.0 &&
+        pos.z <= entry.z + 2.5 &&
+        pos.z >= park.z - 2.5 &&
+        carFromMonDotFront > 2.2;
 
       if (offCentralAvenue && nearAnyMonument) {
         let parkAtualZ = pos.z;
         let monZ = pos.z;
+        let monX = pos.x;
         if (nearestMon) {
           const nearWp =
             this.resolveWaypoints(nearestMon.id) ??
             this.createFallbackWaypoints(nearestMon);
           parkAtualZ = nearWp.park.z;
           monZ = nearestMon.worldPos.z;
+          monX = nearestMon.worldPos.x;
         }
 
-        // Route out to central avenue X=0; stay behind monument if already on -Z side, else exit toward +Z
-        const rawExitZ =
-          pos.z < monZ - 1.5
-            ? pos.z - 1.5
-            : Math.max(pos.z + 2.5, parkAtualZ);
-        const clampedExitZ = THREE.MathUtils.clamp(rawExitZ, -201.5, 22);
-        waypoints.push(new THREE.Vector3(0, 0, clampedExitZ));
+        // Exit in an open arc away from the monument toward the central avenue (X = 0)
+        const exitArcX =
+          Math.abs(pos.x) > 3.5
+            ? pos.x * 0.45
+            : monX >= 0
+              ? -4.5
+              : 4.5;
+        const rawExitArcZ = headingTowardNegZ
+          ? pos.z < monZ - 1.5
+            ? pos.z - 4.0
+            : Math.min(pos.z - 5.0, Math.max(bayJoinZ + 8.0, pos.z - 6.0))
+          : Math.max(pos.z + 4.5, parkAtualZ + 3.5);
+        const exitArcZ = THREE.MathUtils.clamp(rawExitArcZ, -201.5, 22);
+        const exitArcPt = new THREE.Vector3(exitArcX, 0, exitArcZ);
+        controlPoints.push(exitArcPt);
 
-        if (obsFrontBlocked) {
+        const toExitDx = exitArcPt.x - pos.x;
+        const toExitDz = exitArcPt.z - pos.z;
+        const toExitLen = Math.hypot(toExitDx, toExitDz) || 1;
+        const dotToExit = (fwdX * toExitDx + fwdZ * toExitDz) / toExitLen;
+
+        if (obsFrontBlocked || dotToExit < -0.35) {
           initialReverseTimer = 0.85;
         }
+      } else {
+        // Tangent point 5m ahead along current heading so spline leaves smoothly
+        controlPoints.push(
+          new THREE.Vector3(pos.x + fwdX * 5.0, 0, pos.z + fwdZ * 5.0),
+        );
       }
 
-      // Cruise down unobstructed central avenue (X=0) to target bay Z alignment.
-      // Note: Do NOT push `entry` as a separate intermediate stop before `park`, because
-      // `entry` is ~11m off the central avenue and forces a tight U-turn + back-and-forth maneuver!
-      // Instead, turn smoothly from `(0, entry.z)` directly into `park` along the bay corridor.
-      const cruiseZ = THREE.MathUtils.clamp(entry.z, -198, 20);
-      const cruiseWp = new THREE.Vector3(0, 0, cruiseZ);
-      if (
-        waypoints.length === 0 ||
-        waypoints[waypoints.length - 1].distanceTo(cruiseWp) > 1.8
-      ) {
-        waypoints.push(cruiseWp);
+      if (!isDirectBayGlide) {
+        // Central avenue entry (0, entryTurnZ) with >= 12m transition before bay Z when distance permits
+        let entryTurnZ: number;
+        if (headingTowardNegZ) {
+          const idealTurnZ = Math.max(bayJoinZ + 6.0, entry.z + 14.0);
+          entryTurnZ = THREE.MathUtils.clamp(
+            Math.min(pos.z - 6.0, idealTurnZ),
+            -198,
+            22,
+          );
+          if (entryTurnZ > bayJoinZ + 2.5 && entryTurnZ < pos.z - 2.0) {
+            controlPoints.push(new THREE.Vector3(0, 0, entryTurnZ));
+          }
+        } else {
+          const idealTurnZ = Math.min(bayJoinZ - 12.0, pos.z + 10.0);
+          entryTurnZ = THREE.MathUtils.clamp(
+            Math.max(pos.z + 6.0, idealTurnZ),
+            -198,
+            22,
+          );
+          if (entryTurnZ < bayJoinZ - 2.5 && entryTurnZ > pos.z + 2.0) {
+            controlPoints.push(new THREE.Vector3(0, 0, entryTurnZ));
+          }
+        }
+
+        // Wide bay curve start on central avenue (0, bayJoinZ), backed 10m toward origin
+        controlPoints.push(new THREE.Vector3(0, 0, bayJoinZ));
+        controlPoints.push(entry.clone());
       }
     }
 
-    waypoints.push(park.clone());
+    controlPoints.push(park.clone());
+
+    const waypoints = this.buildSmoothAutopilotPath(
+      controlPoints,
+      project.id,
+      obsList,
+    );
 
     const initialStage: AutopilotStage =
-      waypoints.length === 1 ? 'park' : 'entry';
+      waypoints.length <= 1 ? 'park' : 'entry';
 
     this.autopilot = {
       mode,
@@ -828,6 +998,7 @@ export class CarController {
       stuckTimer: 0,
       reverseTimer: initialReverseTimer,
       reverseCooldown: 0,
+      smoothSteer: 0,
     };
   }
 
@@ -1089,7 +1260,7 @@ export class CarController {
 
     // Brake & Reversing tail lights
     const inReverse = this.gear === 'R';
-    const brakeEmissive = isBraking ? 3.2 : this.headlightsOn ? 1.05 : 0.35;
+    const brakeEmissive = isBraking ? 3.2 : this.headlightsOn ? 1.05 : 0.32;
     for (const mat of this.brakelightMats) {
       mat.emissiveIntensity = brakeEmissive;
     }
@@ -1257,18 +1428,33 @@ export class CarController {
     const posX = this.carGroup.position.x;
     const posZ = this.carGroup.position.z;
 
-    // Advance sequentially through waypoints (< 3.8m for intermediate avenue points)
-    while (ap.waypointIndex < ap.waypoints.length - 1) {
-      const wp = ap.waypoints[ap.waypointIndex];
-      if (Math.hypot(wp.x - posX, wp.z - posZ) < 3.8) {
-        ap.waypointIndex++;
-      } else {
+    // Advance waypointIndex monotonically to the closest waypoint ahead along the spline
+    let bestIdx = ap.waypointIndex;
+    let bestDist = Math.hypot(
+      ap.waypoints[bestIdx].x - posX,
+      ap.waypoints[bestIdx].z - posZ,
+    );
+    const searchLimit = Math.min(ap.waypoints.length - 1, ap.waypointIndex + 10);
+    for (let i = ap.waypointIndex + 1; i <= searchLimit; i++) {
+      const d = Math.hypot(ap.waypoints[i].x - posX, ap.waypoints[i].z - posZ);
+      if (d <= bestDist + 0.15) {
+        bestDist = d;
+        bestIdx = i;
+      } else if (d > bestDist + 2.5) {
         break;
       }
     }
+    ap.waypointIndex = bestIdx;
 
-    const isFinalWaypoint = ap.waypointIndex >= ap.waypoints.length - 1;
-    ap.stage = isFinalWaypoint ? 'park' : 'entry';
+    while (
+      ap.waypointIndex < ap.waypoints.length - 1 &&
+      Math.hypot(
+        ap.waypoints[ap.waypointIndex].x - posX,
+        ap.waypoints[ap.waypointIndex].z - posZ,
+      ) < 2.8
+    ) {
+      ap.waypointIndex++;
+    }
 
     const currentTarget = ap.waypoints[ap.waypointIndex];
     const distToTarget = Math.hypot(currentTarget.x - posX, currentTarget.z - posZ);
@@ -1277,6 +1463,10 @@ export class CarController {
       ap.project.worldPos.x - posX,
       ap.project.worldPos.z - posZ,
     );
+
+    const isNearFinalBay =
+      ap.waypointIndex >= ap.waypoints.length - 2 || distToPark < 5.5;
+    ap.stage = isNearFinalBay ? 'park' : 'entry';
 
     // Check if car is cleanly in front of target screen for final bay glide
     const monFrontX = ap.park.x - ap.lookAt.x;
@@ -1289,20 +1479,43 @@ export class CarController {
     // Generous parking tolerance (~3.2m around park point or 6.2..11.6m in front of screen)
     // so the car glides in once and parks smoothly without reversing back and forth!
     if (
-      isFinalWaypoint &&
-      (distToTarget < 3.2 ||
+      isNearFinalBay &&
+      (distToPark < 3.2 ||
         (distToTargetMon >= 6.2 &&
           distToTargetMon <= 11.6 &&
           carFromTargetFront > 4.2 &&
           distToPark < 4.5))
     ) {
       ap.stage = 'braking';
+      ap.smoothSteer = 0;
       return { throttle: 0, steer: 0, handbrake: true, turbo: false };
     }
 
-    // Compute Pure Pursuit target point
-    const targetX = currentTarget.x;
-    const targetZ = currentTarget.z;
+    // Speed-adaptive Pure Pursuit lookahead along the spline waypoints
+    const lookaheadDist = THREE.MathUtils.clamp(
+      4.8 + Math.abs(this.forwardSpeed) * 0.42,
+      4.8,
+      12.5,
+    );
+    let targetX = currentTarget.x;
+    let targetZ = currentTarget.z;
+    let accumDist = distToTarget;
+    if (accumDist < lookaheadDist) {
+      for (let i = ap.waypointIndex; i < ap.waypoints.length - 1; i++) {
+        const a = ap.waypoints[i];
+        const b = ap.waypoints[i + 1];
+        const segLen = Math.hypot(b.x - a.x, b.z - a.z);
+        if (accumDist + segLen >= lookaheadDist && segLen > 0.001) {
+          const t = (lookaheadDist - accumDist) / segLen;
+          targetX = a.x + (b.x - a.x) * t;
+          targetZ = a.z + (b.z - a.z) * t;
+          break;
+        }
+        accumDist += segLen;
+        targetX = b.x;
+        targetZ = b.z;
+      }
+    }
 
     const dx = targetX - posX;
     const dz = targetZ - posZ;
@@ -1311,7 +1524,9 @@ export class CarController {
     const dirZ = dz / Math.max(distToAim, 0.001);
 
     const allowFinalParkApproach =
-      isFinalWaypoint && distToPark < 12.5 && carFromTargetFront > 2.5;
+      distToPark < 12.5 &&
+      carFromTargetFront > 2.5 &&
+      ap.waypointIndex >= Math.max(0, ap.waypoints.length - 7);
 
     // Forward predictive probes (2.6m and 5.0m ahead of front axle) + smooth repulsion
     const frontAxleX = posX + this.forwardVec.x * 1.3431;
@@ -1430,6 +1645,7 @@ export class CarController {
       if (ap.reverseTimer === 0) {
         ap.reverseCooldown = 2.0;
       }
+      ap.smoothSteer = revSteerChoice * 0.6;
       return { throttle: -0.62, steer: revSteerChoice, handbrake: false, turbo: false };
     }
 
@@ -1448,93 +1664,129 @@ export class CarController {
     ) {
       ap.reverseTimer = 0.85;
       ap.stuckTimer = 0;
+      ap.smoothSteer = revSteerChoice * 0.6;
       return { throttle: -0.62, steer: revSteerChoice, handbrake: false, turbo: false };
     }
 
     if (Math.abs(this.forwardSpeed) < 0.55) {
       ap.stuckTimer += dt;
       if (ap.stuckTimer > 1.25) {
-        if (isFinalWaypoint && distToPark < 6.5) {
+        if (isNearFinalBay && distToPark < 6.5) {
           ap.stage = 'braking';
+          ap.smoothSteer = 0;
           return { throttle: 0, steer: 0, handbrake: true, turbo: false };
         }
         ap.reverseTimer = 0.85;
         ap.stuckTimer = 0;
+        ap.smoothSteer = revSteerChoice * 0.6;
         return { throttle: -0.62, steer: revSteerChoice, handbrake: false, turbo: false };
       }
     } else {
       ap.stuckTimer = 0;
     }
 
-    // Pure Pursuit curvature steering with strong predictive evasive override
-    const lookaheadL = THREE.MathUtils.clamp(distToAim, 2.2, 9.0);
-    let steer: number;
+    // Pure Pursuit curvature steering with exponential rate smoothing (zero jerky snaps)
+    const lookaheadL = THREE.MathUtils.clamp(distToAim, 2.2, 12.5);
+    let rawSteer: number;
     if (probeNearHit || probeFarHit) {
-      steer = freeSideSteer;
+      rawSteer = freeSideSteer;
     } else if (dotForward < 0.05) {
-      steer = dotRight >= 0 ? -1 : 1;
+      rawSteer = dotRight >= 0 ? -1 : 1;
     } else {
       const rightOffset = dotRight * lookaheadL;
       const curvature = (2 * rightOffset) / (lookaheadL * lookaheadL);
       const desiredSteerAngle = -Math.atan(WHEELBASE * curvature);
-      steer = THREE.MathUtils.clamp(desiredSteerAngle / maxSteerAngle, -1, 1);
+      rawSteer = THREE.MathUtils.clamp(desiredSteerAngle / maxSteerAngle, -1, 1);
     }
 
-    // Remaining path distance across sequential waypoints
+    const steerAlpha = 1 - Math.exp(-dt * 6.5);
+    ap.smoothSteer =
+      (ap.smoothSteer ?? 0) + (rawSteer - (ap.smoothSteer ?? 0)) * steerAlpha;
+    const steer = THREE.MathUtils.clamp(ap.smoothSteer, -1, 1);
+
+    // Remaining path distance across spline waypoints
     let effectiveDist = distToTarget;
     for (let i = ap.waypointIndex; i < ap.waypoints.length - 1; i++) {
       effectiveDist += ap.waypoints[i].distanceTo(ap.waypoints[i + 1]);
     }
 
-    // Controlled speed profile: clamp(sqrt(2 * 4.0 * effectiveDist), 1.5, 11.5)
-    let targetSpeed = THREE.MathUtils.clamp(
-      Math.sqrt(Math.max(0, 2 * 4.0 * effectiveDist)),
-      1.5,
-      11.5,
+    // Local curvature across the next 3 waypoints ahead
+    let cumulativeTurn = 0;
+    let maxSegTurn = 0;
+    let prevSegDirX = this.forwardVec.x;
+    let prevSegDirZ = this.forwardVec.z;
+    const lookEnd = Math.min(ap.waypoints.length - 1, ap.waypointIndex + 3);
+    for (let i = ap.waypointIndex; i < lookEnd; i++) {
+      const a = ap.waypoints[i];
+      const b = ap.waypoints[i + 1];
+      const sdx = b.x - a.x;
+      const sdz = b.z - a.z;
+      const sLen = Math.hypot(sdx, sdz);
+      if (sLen > 0.25) {
+        const ndx = sdx / sLen;
+        const ndz = sdz / sLen;
+        const segDot = THREE.MathUtils.clamp(
+          prevSegDirX * ndx + prevSegDirZ * ndz,
+          -1,
+          1,
+        );
+        const turnAngle = Math.acos(segDot);
+        cumulativeTurn += turnAngle;
+        if (turnAngle > maxSegTurn) {
+          maxSegTurn = turnAngle;
+        }
+        prevSegDirX = ndx;
+        prevSegDirZ = ndz;
+      }
+    }
+
+    // Straight avenue reaches 11.5 m/s; open curves smoothly reduce to ~5.5..7.5 m/s
+    const curvatureFactor = THREE.MathUtils.clamp(
+      Math.max((cumulativeTurn - 0.14) / 0.72, (maxSegTurn - 0.1) / 0.42),
+      0,
+      1,
+    );
+    const curveSpeedCap = THREE.MathUtils.lerp(11.5, 5.5, curvatureFactor);
+
+    let targetSpeed = Math.min(
+      curveSpeedCap,
+      THREE.MathUtils.clamp(
+        Math.sqrt(Math.max(0, 2 * 3.8 * effectiveDist)),
+        2.2,
+        11.5,
+      ),
     );
 
     if (dotForward < 0.7) {
-      targetSpeed = Math.min(targetSpeed, 6.5);
+      targetSpeed = Math.min(targetSpeed, 6.2);
     }
     if (dotForward < 0.25) {
       targetSpeed = Math.min(targetSpeed, 4.2);
-    }
-
-    // Look ahead to next waypoint turn so car slows smoothly before 90-degree avenue turns
-    if (!isFinalWaypoint && distToTarget < 7.5) {
-      const nextWp = ap.waypoints[ap.waypointIndex + 1];
-      const ndx = nextWp.x - currentTarget.x;
-      const ndz = nextWp.z - currentTarget.z;
-      const nLen = Math.hypot(ndx, ndz);
-      if (nLen > 0.5) {
-        const nextDot =
-          (this.forwardVec.x * ndx + this.forwardVec.z * ndz) / nLen;
-        if (nextDot < 0.7) {
-          targetSpeed = Math.min(targetSpeed, 6.5);
-        }
-      }
     }
 
     if (probeNearHit || probeFarHit) {
       targetSpeed = Math.min(targetSpeed, 5.0);
     }
 
-    if (isFinalWaypoint && distToPark < 2.4) {
-      targetSpeed = Math.min(targetSpeed, Math.max(1.25, distToPark * 1.4));
+    // Gentle deceleration on final bay approach (2.2..4.0 m/s)
+    if (effectiveDist < 10.5 || (isNearFinalBay && distToPark < 10.5)) {
+      const bayFrac = THREE.MathUtils.clamp(distToPark / 10.5, 0, 1);
+      const bayApproachSpeed = THREE.MathUtils.lerp(2.2, 4.0, bayFrac);
+      targetSpeed = Math.min(targetSpeed, bayApproachSpeed);
     }
 
     let throttle = 0;
-    if (this.forwardSpeed < targetSpeed - 0.5) {
+    if (this.forwardSpeed < targetSpeed - 0.45) {
       throttle = THREE.MathUtils.clamp(
         (targetSpeed - this.forwardSpeed) * 0.28,
-        0.25,
+        0.22,
         0.88,
       );
-    } else if (this.forwardSpeed > targetSpeed + 0.9) {
+    } else if (this.forwardSpeed > targetSpeed + 0.75) {
       throttle = THREE.MathUtils.clamp(
         -(this.forwardSpeed - targetSpeed) * 0.35,
         -0.75,
-        -0.2,
+        -0.18,
       );
     } else {
       throttle = 0.08;

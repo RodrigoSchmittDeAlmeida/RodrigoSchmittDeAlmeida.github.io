@@ -151,6 +151,7 @@ const ICONS = {
     '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>',
   close:
     '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>',
+  tips: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
   external:
     '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>',
   prev: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>',
@@ -295,12 +296,13 @@ export class HudController {
 
   private activeProjectModal: PortfolioProject | null = null;
   private currentProximityProject: PortfolioProject | null = null;
+  private currentProximityDist = 0;
   private lastNarratedStationId: string | null = null;
   private modalCleanup: (() => void) | null = null;
 
+  private tipsDismissed = false;
   private pokemonTipIndex = 0;
   private pokemonTypingTimer: number | null = null;
-  private pokemonAutoCycleTimer: number | null = null;
   private pokemonCurrentFullText = '';
   private pokemonCurrentCharIdx = 0;
   private pokemonIsTyping = false;
@@ -316,6 +318,7 @@ export class HudController {
   private camBtn!: HTMLButtonElement;
   private audioBtn!: HTMLButtonElement;
   private lightsBtn!: HTMLButtonElement;
+  private tipsToggleBtn!: HTMLButtonElement;
   private pokemonDialogBox!: HTMLElement;
   private pokemonSpeakerEl!: HTMLElement;
   private pokemonBadgeEl!: HTMLElement;
@@ -323,6 +326,7 @@ export class HudController {
   private pokemonTipsListEl!: HTMLElement;
   private pokemonOpenBtn!: HTMLButtonElement;
   private pokemonNextBtn!: HTMLButtonElement;
+  private pokemonCloseBtn!: HTMLButtonElement;
   private modalBackdrop!: HTMLElement;
   private modalContainer!: HTMLElement;
   private stationBtns: Map<string, HTMLButtonElement> = new Map();
@@ -360,8 +364,10 @@ export class HudController {
         return;
       }
       if (e.code === 'KeyN') {
-        e.preventDefault();
-        this.advanceOrSkipPokemonDialog();
+        if (!this.tipsDismissed) {
+          e.preventDefault();
+          this.advanceOrSkipPokemonDialog();
+        }
         return;
       }
     }
@@ -383,8 +389,8 @@ export class HudController {
 
     this.renderShell();
     this.bindEvents();
+    this.syncTipsToggleUi();
     this.showPokemonTip(0);
-    this.startPokemonAutoCycle();
   }
 
   private renderShell(): void {
@@ -434,6 +440,10 @@ export class HudController {
               ${ICONS.reset}
               <span>Reset</span>
             </button>
+            <button type="button" class="ctrl-btn is-active" id="btn-toggle-tips" title="Mostrar/Ocultar balão de dicas">
+              ${ICONS.tips}
+              <span>Dicas</span>
+            </button>
           </div>
         </header>
 
@@ -448,7 +458,10 @@ export class HudController {
               <span class="pokemon-speaker-dot" id="pokemon-speaker-dot" aria-hidden="true"></span>
               <span class="pokemon-speaker-name" id="pokemon-speaker-name">RODRIGO • GUIA DO GOL G5</span>
             </div>
-            <span class="pokemon-dialog-badge" id="pokemon-dialog-badge">DICA 1/5 • COMO JOGAR</span>
+            <div class="pokemon-header-right">
+              <span class="pokemon-dialog-badge" id="pokemon-dialog-badge">DICA 1/5 • COMO JOGAR</span>
+              <button type="button" class="pokemon-close-btn" id="btn-pokemon-close" aria-label="Fechar dicas" title="Fechar dicas">${ICONS.close}</button>
+            </div>
           </div>
 
           <div class="pokemon-dialog-body" id="pokemon-dialog-body" title="Clique ou pressione [N] para avançar a fala / próxima dica">
@@ -504,6 +517,7 @@ export class HudController {
     this.camBtn = this.root.querySelector('#btn-cam-mode') as HTMLButtonElement;
     this.audioBtn = this.root.querySelector('#btn-audio') as HTMLButtonElement;
     this.lightsBtn = this.root.querySelector('#btn-lights') as HTMLButtonElement;
+    this.tipsToggleBtn = this.root.querySelector('#btn-toggle-tips') as HTMLButtonElement;
     this.pokemonDialogBox = this.root.querySelector('#pokemon-dialog-box') as HTMLElement;
     this.pokemonSpeakerEl = this.root.querySelector('#pokemon-speaker-name') as HTMLElement;
     this.pokemonBadgeEl = this.root.querySelector('#pokemon-dialog-badge') as HTMLElement;
@@ -511,6 +525,7 @@ export class HudController {
     this.pokemonTipsListEl = this.root.querySelector('#pokemon-tips-list') as HTMLElement;
     this.pokemonOpenBtn = this.root.querySelector('#btn-pokemon-open') as HTMLButtonElement;
     this.pokemonNextBtn = this.root.querySelector('#btn-pokemon-next') as HTMLButtonElement;
+    this.pokemonCloseBtn = this.root.querySelector('#btn-pokemon-close') as HTMLButtonElement;
     this.modalBackdrop = this.root.querySelector('#project-modal-backdrop') as HTMLElement;
     this.modalContainer = this.root.querySelector('#project-modal-container') as HTMLElement;
 
@@ -550,6 +565,19 @@ export class HudController {
     this.pokemonNextBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       this.nextPokemonTip();
+    });
+
+    this.pokemonCloseBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.dismissTips();
+    });
+
+    this.tipsToggleBtn.addEventListener('click', () => {
+      if (this.tipsDismissed) {
+        this.openTips();
+      } else {
+        this.dismissTips();
+      }
     });
 
     this.pokemonOpenBtn.addEventListener('click', (e) => {
@@ -607,18 +635,55 @@ export class HudController {
     window.addEventListener('keydown', this.handleKeyDown);
   }
 
-  private startPokemonAutoCycle(): void {
-    if (this.pokemonAutoCycleTimer !== null) {
-      window.clearInterval(this.pokemonAutoCycleTimer);
+  private syncTipsToggleUi(): void {
+    this.tipsToggleBtn.classList.toggle('is-active', !this.tipsDismissed);
+    this.tipsToggleBtn.setAttribute('aria-pressed', String(!this.tipsDismissed));
+  }
+
+  private dismissTips(): void {
+    this.tipsDismissed = true;
+    this.pokemonDialogBox.classList.add('is-dismissed');
+    this.pokemonDialogBox.classList.remove('is-typing');
+    this.pokemonIsTyping = false;
+    if (this.pokemonTypingTimer !== null) {
+      window.clearInterval(this.pokemonTypingTimer);
+      this.pokemonTypingTimer = null;
     }
-    this.pokemonAutoCycleTimer = window.setInterval(() => {
-      if (!this.currentProximityProject && !this.activeProjectModal && !this.pokemonIsTyping) {
-        this.nextPokemonTip();
-      }
-    }, 13500);
+    this.syncTipsToggleUi();
+  }
+
+  private openTips(): void {
+    this.tipsDismissed = false;
+    this.pokemonDialogBox.classList.remove('is-dismissed');
+    this.syncTipsToggleUi();
+
+    if (this.currentProximityProject) {
+      this.pokemonOpenBtn.classList.remove('is-hidden');
+      this.lastNarratedStationId = this.currentProximityProject.id;
+      this.showStationDialog(this.currentProximityProject, this.currentProximityDist);
+    } else {
+      this.showPokemonTip(this.pokemonTipIndex);
+    }
+  }
+
+  private showStationDialog(project: PortfolioProject, dist: number): void {
+    const stationDialog = POKEMON_STATION_DIALOGS[project.id];
+    this.setPokemonDialog({
+      speaker: stationDialog?.speaker ?? `ESTAÇÃO #${project.index} • ${project.shortName.toUpperCase()}`,
+      badge: `${project.category.toUpperCase()} • ${dist.toFixed(1)}M`,
+      accentColor: project.color,
+      caption:
+        stationDialog?.caption ??
+        `Você chegou em ${project.title}! ${project.subtitle}. Olhe para o telão para assistir à demonstração ao vivo ou pressione [E] para abrir os detalhes!`,
+      tips: ['[E] Abrir Simulador', '[Olhar Telão] Roda Vídeo', '[V] Ver do Cockpit', '[N] Ver Dicas'],
+    });
   }
 
   private setPokemonDialog(entry: PokemonDialogEntry): void {
+    if (this.tipsDismissed) {
+      return;
+    }
+
     if (this.pokemonTypingTimer !== null) {
       window.clearInterval(this.pokemonTypingTimer);
       this.pokemonTypingTimer = null;
@@ -668,6 +733,9 @@ export class HudController {
   }
 
   private advanceOrSkipPokemonDialog(): void {
+    if (this.tipsDismissed) {
+      return;
+    }
     if (this.pokemonIsTyping) {
       this.finishPokemonTyping();
       return;
@@ -689,6 +757,9 @@ export class HudController {
   }
 
   private announceAutopilotTarget(project: PortfolioProject): void {
+    if (this.tipsDismissed) {
+      return;
+    }
     this.pokemonOpenBtn.classList.add('is-hidden');
     this.setPokemonDialog({
       speaker: `PILOTO AUTOMÁTICO • ROTA #${project.index}`,
@@ -700,6 +771,9 @@ export class HudController {
   }
 
   private announceTourState(): void {
+    if (this.tipsDismissed) {
+      return;
+    }
     if (this.tourActive) {
       this.setPokemonDialog({
         speaker: 'TOUR AUTOMÁTICO ATIVADO',
@@ -735,6 +809,10 @@ export class HudController {
     this.cameraMode = mode;
     this.updateCameraModeUi();
     this.callbacks.onToggleCameraMode(mode);
+
+    if (this.tipsDismissed) {
+      return;
+    }
 
     if (mode === 'firstperson') {
       this.setPokemonDialog({
@@ -819,6 +897,7 @@ export class HudController {
 
   public setProximity(project: PortfolioProject | null, dist: number): void {
     this.currentProximityProject = project;
+    this.currentProximityDist = dist;
     if (!project) {
       this.pokemonOpenBtn.classList.add('is-hidden');
       if (this.lastNarratedStationId !== null) {
@@ -829,18 +908,13 @@ export class HudController {
 
     this.pokemonOpenBtn.classList.remove('is-hidden');
 
+    if (this.tipsDismissed) {
+      return;
+    }
+
     if (this.lastNarratedStationId !== project.id) {
       this.lastNarratedStationId = project.id;
-      const stationDialog = POKEMON_STATION_DIALOGS[project.id];
-      this.setPokemonDialog({
-        speaker: stationDialog?.speaker ?? `ESTAÇÃO #${project.index} • ${project.shortName.toUpperCase()}`,
-        badge: `${project.category.toUpperCase()} • ${dist.toFixed(1)}M`,
-        accentColor: project.color,
-        caption:
-          stationDialog?.caption ??
-          `Você chegou em ${project.title}! ${project.subtitle}. Olhe para o telão para assistir à demonstração ao vivo ou pressione [E] para abrir os detalhes!`,
-        tips: ['[E] Abrir Simulador', '[Olhar Telão] Roda Vídeo', '[V] Ver do Cockpit', '[N] Ver Dicas'],
-      });
+      this.showStationDialog(project, dist);
     }
   }
 
@@ -1858,10 +1932,6 @@ export class HudController {
     if (this.pokemonTypingTimer !== null) {
       window.clearInterval(this.pokemonTypingTimer);
       this.pokemonTypingTimer = null;
-    }
-    if (this.pokemonAutoCycleTimer !== null) {
-      window.clearInterval(this.pokemonAutoCycleTimer);
-      this.pokemonAutoCycleTimer = null;
     }
     window.removeEventListener('keydown', this.handleKeyDown);
   }

@@ -576,10 +576,10 @@ export class SceneManager {
     // 6. Update 3rd-person chase / 3-4 showroom or free orbit camera
     this.updateCamera(dt, nearestProject, nearestDist);
 
-    // 7. Emit telemetry & proximity callbacks
+    // 7. Emit telemetry & proximity callbacks (match 12.2m comfortable bay stopping margin)
     this.callbacks.onTelemetry(telemetry);
 
-    const activeNear = nearestDist < 9.5 ? nearestProject : null;
+    const activeNear = nearestDist < 12.2 ? nearestProject : null;
     const activeId = activeNear ? activeNear.id : null;
     if (activeId !== this.lastProximityId) {
       if (activeNear && this.lastProximityId !== activeId) {
