@@ -87,8 +87,8 @@ export const PORTFOLIO_PROJECTS: PortfolioProject[] = [
     subtitle: 'Plataforma B2B de Câmbio Internacional, Stablecoins & AppSec em Rust',
     category: 'FinTech B2B & AppSec',
     period: 'AGES / PUCRS • 2026',
-    repoUrl: 'https://github.com/RodrigoSchmittDeAlmeida/frontend',
-    repoLabel: 'github.com/RodrigoSchmittDeAlmeida/frontend',
+    repoUrl: 'https://github.com/RodrigoSchmittDeAlmeida/v-stable-frontend',
+    repoLabel: 'github.com/RodrigoSchmittDeAlmeida/v-stable-frontend',
     summary:
       'Infraestrutura corporativa de liquidação cross-border em stablecoins (USDC, USDT, BRLA, EURC) com trilhos PIX, ACH, Wire, SEPA e SWIFT, sanitizador em Rust e pentest STRIDE.',
     whatItDoes:
@@ -131,8 +131,8 @@ export const PORTFOLIO_PROJECTS: PortfolioProject[] = [
     subtitle: 'Assistente Virtual de Suporte Zero-PII & Rate-Limit de Nielsen',
     category: 'IA Aplicada & Engenharia de UX',
     period: 'AGES / PUCRS • 2026',
-    repoUrl: 'https://github.com/RodrigoSchmittDeAlmeida/frontend',
-    repoLabel: 'SupportChatWidget.tsx • V-Stable',
+    repoUrl: 'https://github.com/RodrigoSchmittDeAlmeida/v-stable-frontend',
+    repoLabel: 'SupportChatWidget.tsx • v-stable-frontend',
     summary:
       'Assistente conversacional integrado à V-Stable (SupportChatWidget.tsx + SupportChatService.java) com fallback offline Zero-PII, heurísticas de Nielsen e controle de taxa de 15 req/min.',
     whatItDoes:
