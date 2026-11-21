@@ -49,9 +49,9 @@ function getStationColor(project: PortfolioProject): string {
   return maybeColor || FALLBACK_STATION_COLORS[project.id] || '#4a93d4';
 }
 
-const TARGET_FPS = 20;
+const TARGET_FPS = 15;
 const FRAME_INTERVAL = 1 / TARGET_FPS;
-const MAX_PLAY_DISTANCE = 46;
+const MAX_PLAY_DISTANCE = 44;
 const MIN_CAMERA_DOT = 0.35;
 const MIN_FRONT_FACE_DOT = -0.15;
 
@@ -154,15 +154,15 @@ export class ProjectMonuments3D {
       for (const sx of [-2.25, 2.25]) {
         const strut = new THREE.Mesh(strutGeo, deepslateMat);
         strut.position.set(sx, 1.82, -0.52);
-        strut.castShadow = true;
-        strut.receiveShadow = true;
+        strut.castShadow = false;
+        strut.receiveShadow = false;
         root.add(strut);
       }
 
       for (const sy of [1.85, 3.45]) {
         const spine = new THREE.Mesh(spineGeo, deepslateMat);
         spine.position.set(0.25, sy, -0.32);
-        spine.castShadow = true;
+        spine.castShadow = false;
         root.add(spine);
       }
 
@@ -175,8 +175,8 @@ export class ProjectMonuments3D {
       // Left Panel: Live Video-Demo Canvas (5.40 x 3.38 m at x = -1.68)
       const videoBack = new THREE.Mesh(videoBackGeo, deepslateMat);
       videoBack.position.set(-1.68, 0, -0.09);
-      videoBack.castShadow = true;
-      videoBack.receiveShadow = true;
+      videoBack.castShadow = false;
+      videoBack.receiveShadow = false;
       videoBack.userData.projectId = project.id;
       displayGroup.add(videoBack);
 
@@ -185,9 +185,10 @@ export class ProjectMonuments3D {
 
       const screenTexture = new THREE.CanvasTexture(demoRenderer.getCanvas());
       screenTexture.colorSpace = THREE.SRGBColorSpace;
-      screenTexture.anisotropy = clampedAniso;
-      screenTexture.generateMipmaps = true;
-      screenTexture.minFilter = THREE.LinearMipmapLinearFilter;
+      screenTexture.anisotropy = Math.min(4, clampedAniso);
+      // Avoid expensive per-frame GPU mipmap chain generation on dynamic canvas uploads
+      screenTexture.generateMipmaps = false;
+      screenTexture.minFilter = THREE.LinearFilter;
       screenTexture.magFilter = THREE.LinearFilter;
       screenTexture.needsUpdate = true;
       this.textures.push(screenTexture);
@@ -206,8 +207,8 @@ export class ProjectMonuments3D {
       // Right Panel: High-Res Editorial Description (3.10 x 3.38 m at x = +2.78)
       const descBack = new THREE.Mesh(descBackGeo, deepslateMat);
       descBack.position.set(2.78, 0, -0.09);
-      descBack.castShadow = true;
-      descBack.receiveShadow = true;
+      descBack.castShadow = false;
+      descBack.receiveShadow = false;
       descBack.userData.projectId = project.id;
       displayGroup.add(descBack);
 
@@ -234,7 +235,7 @@ export class ProjectMonuments3D {
 
       const titleBack = new THREE.Mesh(titleBackGeo, deepslateMat);
       titleBack.position.set(0, 0, -0.045);
-      titleBack.castShadow = true;
+      titleBack.castShadow = false;
       titleBack.userData.projectId = project.id;
       titleGroup.add(titleBack);
 
@@ -802,8 +803,9 @@ export class ProjectMonuments3D {
   }
 
   /**
-   * Updates floating title signs, gaze-gated 20 FPS video playback, and returns
-   * the list of project IDs currently playing.
+   * Updates floating title signs, gaze-gated 15 FPS video playback (capped to
+   * the single best-aligned station per frame to prevent multi-canvas GPU upload stalls),
+   * and returns the list of project IDs currently playing.
    */
   public update(dt: number, camera: THREE.Camera, carPosition: THREE.Vector3): string[] {
     this.globalTime += dt;
@@ -813,6 +815,9 @@ export class ProjectMonuments3D {
     this.projScreenMatrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
     this.frustum.setFromProjectionMatrix(this.projScreenMatrix);
     this.cameraForward.set(0, 0, -1).applyQuaternion(camera.quaternion).normalize();
+
+    let bestEntry: MonumentEntry | null = null;
+    let bestScore = -Infinity;
 
     for (const entry of this.entries) {
       // Gentle vertical float on the 3D name sign above (y ~ 5.15 m)
@@ -830,17 +835,24 @@ export class ProjectMonuments3D {
 
       // Gaze & Frustum Gating
       const camDist = camera.position.distanceTo(entry.screenWorldCenter);
-      let isLooking = false;
-
       if (camDist < MAX_PLAY_DISTANCE && this.frustum.intersectsSphere(entry.screenSphere)) {
         this.tmpDir.subVectors(entry.screenWorldCenter, camera.position).normalize();
         const forwardDot = this.cameraForward.dot(this.tmpDir);
         const frontFaceDot = entry.screenForward.dot(this.tmpDir.negate());
 
         if (forwardDot > MIN_CAMERA_DOT && frontFaceDot > MIN_FRONT_FACE_DOT) {
-          isLooking = true;
+          // Prioritize the closest & most centered screen in view
+          const score = forwardDot * 32 - camDist;
+          if (score > bestScore) {
+            bestScore = score;
+            bestEntry = entry;
+          }
         }
       }
+    }
+
+    for (const entry of this.entries) {
+      const isLooking = entry === bestEntry;
 
       if (isLooking) {
         entry.demoElapsed += dt;

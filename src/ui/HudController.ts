@@ -55,6 +55,90 @@ const SCREENSHOT_CAPTIONS: Record<string, string> = {
   '06-prejuizo-acumulado.png': 'Prejuízo Financeiro Acumulado (USD)',
 };
 
+interface PokemonDialogEntry {
+  speaker: string;
+  badge: string;
+  accentColor?: string;
+  caption: string;
+  tips: string[];
+}
+
+const POKEMON_GAMEPLAY_TIPS: PokemonDialogEntry[] = [
+  {
+    speaker: 'RODRIGO • GUIA DO GOL G5',
+    badge: 'DICA 1/5 • COMO JOGAR',
+    caption:
+      'Bem-vindo ao meu portfólio 3D no Minecraft! Use [WASD] ou [Setas] para dirigir o Gol G5 Preto pela avenida de pedra, ou pressione [T] (Tour Auto) para o carro visitar todas as 7 estações sozinho!',
+    tips: ['[WASD] Dirigir', '[T] Tour Auto', '[1–7] Ir à Estação', '[N] Próxima Dica'],
+  },
+  {
+    speaker: 'COCKPIT VW GOL G5 1.6',
+    badge: 'DICA 2/5 • 1ª PESSOA',
+    caption:
+      'Quer dirigir de dentro do Gol G5 vendo o painel e o volante girando para o lado certo? Pressione [V] ou [C] para entrar na CÂMERA EM 1ª PESSOA e arraste o mouse para olhar ao redor!',
+    tips: ['[V] 1ª Pessoa', '[C] Trocar Câmera', '[Mouse] Olhar', '[B] Buzina'],
+  },
+  {
+    speaker: 'TELÕES INTERATIVOS 3D',
+    badge: 'DICA 3/5 • VÍDEO POR OLHAR',
+    caption:
+      'Pare o Gol G5 na baia de qualquer projeto e olhe para o telão: o vídeo demonstrativo roda automaticamente enquanto você estiver olhando! Aperte [E] ou clique no telão para abrir o simulador completo.',
+    tips: ['[Olhar] Roda Vídeo', '[E] Abrir Projeto', '[Clique] Interagir', '[Esc] Fechar'],
+  },
+  {
+    speaker: 'RADAR & TELETRANSPORTE',
+    badge: 'DICA 4/5 • NAVEGAÇÃO RÁPIDA',
+    caption:
+      'Cada projeto tem uma cor única no minimapa (canto inferior direito) e no menu superior. Clique em qualquer ponto colorido do radar ou aperte as teclas [1] a [7] para o piloto automático levar você até lá!',
+    tips: ['[1–7] Piloto Auto', '[Minimapa] Clicar', '[R] Resetar Carro', '[H] Faróis'],
+  },
+  {
+    speaker: 'FÍSICA & DRIFT',
+    badge: 'DICA 5/5 • CONTROLES',
+    caption:
+      'Segure [Shift] para ativar o Turbo na reta principal e pressione [Espaço] nas curvas para puxar o freio de mão, soltar fumaça dos pneus e fazer drift com o Gol G5!',
+    tips: ['[Espaço] Drift & Fumaça', '[Shift] Turbo', '[Áudio] Som do Motor', '[N] Próxima Dica'],
+  },
+];
+
+const POKEMON_STATION_DIALOGS: Record<string, { speaker: string; caption: string }> = {
+  leitorECU: {
+    speaker: 'ESTAÇÃO #1 • LEITORECU (GOL G5)',
+    caption:
+      'Você chegou ao leitorECU! Este datalogger automotivo lê a injeção Bosch ME7.5.30 do Gol G5 via KWP2000/OBD2 a 30 FPS. Olhe para o telão para ver o vídeo da telemetria ou aperte [E] para abrir!',
+  },
+  vstable: {
+    speaker: 'ESTAÇÃO #2 • V-STABLE FINTECH',
+    caption:
+      'Esta é a V-Stable! Plataforma B2B de remessas internacionais e tesouraria multi-moeda (PIX, SWIFT, ACH, SEPA e Stablecoins com 2FA TOTP). Olhe para o telão ou pressione [E] para inspecionar as telas reais!',
+  },
+  chatbot: {
+    speaker: 'ESTAÇÃO #3 • V-STABLE CHATBOT IA',
+    caption:
+      'Você está no Assistente Virtual IA da V-Stable! Ele responde dúvidas de corredores (como Colômbia/COP vs. Wallet Cripto) e 2FA com arquitetura Zero-PII. Aperte [E] para conversar com o Chatbot ao vivo!',
+  },
+  vincula: {
+    speaker: 'ESTAÇÃO #4 • VINCULA (GRAFO AGES)',
+    caption:
+      'Bem-vindo ao Vincula! Projeto desenvolvido na AGES com Grafo Interativo de Rede de Apoio e Pareamento Clínico em tempo real. Olhe para o telão para ver o grafo em ação ou pressione [E]!',
+  },
+  ordovitae: {
+    speaker: 'ESTAÇÃO #5 • ORDOVITAE (HACKATONA)',
+    caption:
+      'Este é o OrdoVitae, desenvolvido na Hackatona! Sistema de triagem clínica e priorização médica assistida por IA com protocolo Manchester. Olhe para o telão ou aperte [E] para testar a fila médica!',
+  },
+  t2ia: {
+    speaker: 'ESTAÇÃO #6 • T2IA (REDE NEURAL & AG)',
+    caption:
+      'Trabalho de Inteligência Artificial (T2IA): Flappy Bird jogado por 50 agentes evoluindo via Algoritmo Genético e Rede Neural MLP construída do zero! Olhe para o telão ou aperte [E] para ver as gerações!',
+  },
+  smarttalent: {
+    speaker: 'ESTAÇÃO #7 • SMART TALENT ANALYTICS',
+    caption:
+      'Estação final: Smart Talent! Torre de decisão logística sobre 180 mil pedidos reais investigando atrasos e o Paradoxo de Simpson. Olhe para o telão ou pressione [E] para explorar os 7 gráficos!',
+  },
+};
+
 const ICONS = {
   tour: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3"/></svg>',
   camera:
@@ -206,12 +290,20 @@ export class HudController {
 
   private cameraMode: CameraMode = 'chase';
   private audioEnabled = false;
-  private headlightsOn = true;
+  private headlightsOn = false;
   private tourActive = false;
 
   private activeProjectModal: PortfolioProject | null = null;
   private currentProximityProject: PortfolioProject | null = null;
+  private lastNarratedStationId: string | null = null;
   private modalCleanup: (() => void) | null = null;
+
+  private pokemonTipIndex = 0;
+  private pokemonTypingTimer: number | null = null;
+  private pokemonAutoCycleTimer: number | null = null;
+  private pokemonCurrentFullText = '';
+  private pokemonCurrentCharIdx = 0;
+  private pokemonIsTyping = false;
 
   private speedEl!: HTMLElement;
   private gearEl!: HTMLElement;
@@ -233,6 +325,13 @@ export class HudController {
   private driveHintChip!: HTMLElement;
   private proximityBanner!: HTMLElement;
   private proximityTitleEl!: HTMLElement;
+  private pokemonDialogBox!: HTMLElement;
+  private pokemonSpeakerEl!: HTMLElement;
+  private pokemonBadgeEl!: HTMLElement;
+  private pokemonTextEl!: HTMLElement;
+  private pokemonTipsListEl!: HTMLElement;
+  private pokemonOpenBtn!: HTMLButtonElement;
+  private pokemonNextBtn!: HTMLButtonElement;
   private modalBackdrop!: HTMLElement;
   private modalContainer!: HTMLElement;
   private stationBtns: Map<string, HTMLButtonElement> = new Map();
@@ -256,6 +355,7 @@ export class HudController {
         e.preventDefault();
         this.tourActive = this.callbacks.onToggleTour();
         this.syncTourUi();
+        this.announceTourState();
         return;
       }
       if (e.code === 'KeyC') {
@@ -268,6 +368,11 @@ export class HudController {
         this.toggleFirstPersonMode();
         return;
       }
+      if (e.code === 'KeyN') {
+        e.preventDefault();
+        this.advanceOrSkipPokemonDialog();
+        return;
+      }
     }
 
     const num = Number.parseInt(e.key, 10);
@@ -275,6 +380,7 @@ export class HudController {
       const target = this.projects.find((p) => p.index === num);
       if (target) {
         this.callbacks.onDriveToProject(target.id);
+        this.announceAutopilotTarget(target);
       }
     }
   };
@@ -286,6 +392,8 @@ export class HudController {
 
     this.renderShell();
     this.bindEvents();
+    this.showPokemonTip(0);
+    this.startPokemonAutoCycle();
   }
 
   private renderShell(): void {
@@ -326,7 +434,7 @@ export class HudController {
             ${ICONS.audio}
             <span>Áudio</span>
           </button>
-          <button type="button" class="ctrl-btn is-active" id="btn-lights" title="Ligar/Desligar Faróis (H)">
+          <button type="button" class="ctrl-btn" id="btn-lights" title="Ligar/Desligar Faróis (H)">
             ${ICONS.lights}
             <span>Farol</span>
           </button>
@@ -339,19 +447,63 @@ export class HudController {
 
       <div class="hud-center-stack">
         <div class="drive-hint-chip" id="drive-hint-chip">
-          <span>Dirija com <strong>WASD</strong>, clique em uma estação ou ative o <strong>Tour Auto</strong></span>
+          <span>Dica: use <strong>WASD</strong> para dirigir, <strong>V</strong> para 1ª Pessoa dentro do Gol G5 ou <strong>T</strong> para Tour Auto</span>
           <button type="button" class="drive-hint-cta" id="btn-hint-audio">Ativar Áudio</button>
           <button type="button" class="icon-dismiss-btn" id="btn-hint-dismiss" aria-label="Dispensar dica">
             ${ICONS.close}
           </button>
         </div>
 
-        <div class="proximity-banner" id="proximity-banner" role="button" tabindex="0">
-          <span class="proximity-key">E</span>
-          <div>
-            <div class="proximity-title" id="proximity-title">Estação próxima</div>
-            <div class="proximity-sub">Pressione E ou clique para abrir detalhes</div>
+        <div class="hud-bottom-prompts">
+          <div class="proximity-banner" id="proximity-banner" role="button" tabindex="0">
+            <span class="proximity-key">E</span>
+            <div>
+              <div class="proximity-title" id="proximity-title">Estação próxima</div>
+              <div class="proximity-sub">Pressione E ou clique para abrir detalhes</div>
+            </div>
           </div>
+
+          <section
+            class="pokemon-dialog-box"
+            id="pokemon-dialog-box"
+            aria-live="polite"
+            aria-label="Legenda e dicas de jogo estilo Pokémon"
+          >
+            <div class="pokemon-dialog-header">
+              <div class="pokemon-speaker-pill">
+                <span class="pokemon-speaker-dot" id="pokemon-speaker-dot" aria-hidden="true"></span>
+                <span class="pokemon-speaker-name" id="pokemon-speaker-name">RODRIGO • GUIA DO GOL G5</span>
+              </div>
+              <span class="pokemon-dialog-badge" id="pokemon-dialog-badge">DICA 1/5 • COMO JOGAR</span>
+            </div>
+
+            <div class="pokemon-dialog-body" id="pokemon-dialog-body" title="Clique ou pressione [N] para avançar a fala / próxima dica">
+              <p class="pokemon-dialog-text" id="pokemon-dialog-text"></p>
+              <span class="pokemon-dialog-cursor" aria-hidden="true">▼</span>
+            </div>
+
+            <div class="pokemon-dialog-footer">
+              <div class="pokemon-tips-list" id="pokemon-tips-list"></div>
+              <div class="pokemon-dialog-actions">
+                <button
+                  type="button"
+                  class="pokemon-action-btn is-primary is-hidden"
+                  id="btn-pokemon-open"
+                  title="Abrir detalhes e simulador interativo desta estação (Tecla E)"
+                >
+                  [E] Abrir Projeto
+                </button>
+                <button
+                  type="button"
+                  class="pokemon-action-btn"
+                  id="btn-pokemon-next"
+                  title="Mostrar próxima dica de controles (Tecla N)"
+                >
+                  Próxima Dica [N] ▸
+                </button>
+              </div>
+            </div>
+          </section>
         </div>
       </div>
 
@@ -432,6 +584,13 @@ export class HudController {
     this.driveHintChip = this.root.querySelector('#drive-hint-chip') as HTMLElement;
     this.proximityBanner = this.root.querySelector('#proximity-banner') as HTMLElement;
     this.proximityTitleEl = this.root.querySelector('#proximity-title') as HTMLElement;
+    this.pokemonDialogBox = this.root.querySelector('#pokemon-dialog-box') as HTMLElement;
+    this.pokemonSpeakerEl = this.root.querySelector('#pokemon-speaker-name') as HTMLElement;
+    this.pokemonBadgeEl = this.root.querySelector('#pokemon-dialog-badge') as HTMLElement;
+    this.pokemonTextEl = this.root.querySelector('#pokemon-dialog-text') as HTMLElement;
+    this.pokemonTipsListEl = this.root.querySelector('#pokemon-tips-list') as HTMLElement;
+    this.pokemonOpenBtn = this.root.querySelector('#btn-pokemon-open') as HTMLButtonElement;
+    this.pokemonNextBtn = this.root.querySelector('#btn-pokemon-next') as HTMLButtonElement;
     this.modalBackdrop = this.root.querySelector('#project-modal-backdrop') as HTMLElement;
     this.modalContainer = this.root.querySelector('#project-modal-container') as HTMLElement;
 
@@ -447,15 +606,38 @@ export class HudController {
 
   private bindEvents(): void {
     this.stationBtns.forEach((btn, id) => {
-      btn.addEventListener('click', () => this.callbacks.onDriveToProject(id));
+      btn.addEventListener('click', () => {
+        this.callbacks.onDriveToProject(id);
+        const target = this.projects.find((p) => p.id === id);
+        if (target) {
+          this.announceAutopilotTarget(target);
+        }
+      });
     });
 
     this.tourBtn.addEventListener('click', () => {
       this.tourActive = this.callbacks.onToggleTour();
       this.syncTourUi();
+      this.announceTourState();
     });
 
     this.camBtn.addEventListener('click', () => this.cycleCameraMode());
+
+    this.root.querySelector('#pokemon-dialog-body')?.addEventListener('click', () => {
+      this.advanceOrSkipPokemonDialog();
+    });
+
+    this.pokemonNextBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.nextPokemonTip();
+    });
+
+    this.pokemonOpenBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (this.currentProximityProject) {
+        this.openProjectModal(this.currentProximityProject);
+      }
+    });
 
     const toggleAudioHandler = (): void => {
       this.audioEnabled = this.callbacks.onToggleAudio();
@@ -515,10 +697,118 @@ export class HudController {
       }
       if (closest) {
         this.callbacks.onDriveToProject(closest.id);
+        this.announceAutopilotTarget(closest);
       }
     });
 
     window.addEventListener('keydown', this.handleKeyDown);
+  }
+
+  private startPokemonAutoCycle(): void {
+    if (this.pokemonAutoCycleTimer !== null) {
+      window.clearInterval(this.pokemonAutoCycleTimer);
+    }
+    this.pokemonAutoCycleTimer = window.setInterval(() => {
+      if (!this.currentProximityProject && !this.activeProjectModal && !this.pokemonIsTyping) {
+        this.nextPokemonTip();
+      }
+    }, 13500);
+  }
+
+  private setPokemonDialog(entry: PokemonDialogEntry): void {
+    if (this.pokemonTypingTimer !== null) {
+      window.clearInterval(this.pokemonTypingTimer);
+      this.pokemonTypingTimer = null;
+    }
+
+    this.pokemonSpeakerEl.textContent = entry.speaker;
+    this.pokemonBadgeEl.textContent = entry.badge;
+
+    const dotEl = this.root.querySelector('#pokemon-speaker-dot') as HTMLElement | null;
+    if (dotEl) {
+      dotEl.style.backgroundColor = entry.accentColor || '#38bdf8';
+    }
+
+    this.pokemonTipsListEl.innerHTML = entry.tips
+      .map((t) => `<span class="pokemon-tip-pill">${escapeHtml(t)}</span>`)
+      .join('');
+
+    this.pokemonCurrentFullText = entry.caption;
+    this.pokemonCurrentCharIdx = 0;
+    this.pokemonIsTyping = true;
+    this.pokemonTextEl.textContent = '';
+    this.pokemonDialogBox.classList.add('is-typing');
+
+    this.pokemonTypingTimer = window.setInterval(() => {
+      this.pokemonCurrentCharIdx = Math.min(
+        this.pokemonCurrentFullText.length,
+        this.pokemonCurrentCharIdx + 3,
+      );
+      this.pokemonTextEl.textContent = this.pokemonCurrentFullText.slice(
+        0,
+        this.pokemonCurrentCharIdx,
+      );
+      if (this.pokemonCurrentCharIdx >= this.pokemonCurrentFullText.length) {
+        this.finishPokemonTyping();
+      }
+    }, 22);
+  }
+
+  private finishPokemonTyping(): void {
+    if (this.pokemonTypingTimer !== null) {
+      window.clearInterval(this.pokemonTypingTimer);
+      this.pokemonTypingTimer = null;
+    }
+    this.pokemonIsTyping = false;
+    this.pokemonTextEl.textContent = this.pokemonCurrentFullText;
+    this.pokemonDialogBox.classList.remove('is-typing');
+  }
+
+  private advanceOrSkipPokemonDialog(): void {
+    if (this.pokemonIsTyping) {
+      this.finishPokemonTyping();
+      return;
+    }
+    this.nextPokemonTip();
+  }
+
+  private showPokemonTip(index: number): void {
+    this.pokemonTipIndex =
+      ((index % POKEMON_GAMEPLAY_TIPS.length) + POKEMON_GAMEPLAY_TIPS.length) %
+      POKEMON_GAMEPLAY_TIPS.length;
+    this.pokemonOpenBtn.classList.add('is-hidden');
+    this.setPokemonDialog(POKEMON_GAMEPLAY_TIPS[this.pokemonTipIndex]);
+  }
+
+  private nextPokemonTip(): void {
+    this.lastNarratedStationId = null;
+    this.showPokemonTip(this.pokemonTipIndex + 1);
+  }
+
+  private announceAutopilotTarget(project: PortfolioProject): void {
+    this.pokemonOpenBtn.classList.add('is-hidden');
+    this.setPokemonDialog({
+      speaker: `PILOTO AUTOMÁTICO • ROTA #${project.index}`,
+      badge: `INDO ATÉ ${project.shortName.toUpperCase()}`,
+      accentColor: project.color,
+      caption: `Levando o Gol G5 automaticamente pelo corredor central até a Estação #${project.index} (${project.title}). Pressione qualquer tecla [WASD] se quiser assumir o volante!`,
+      tips: ['[WASD] Assumir Volante', '[V] Ver em 1ª Pessoa', '[E] Abrir ao Chegar', '[N] Dicas'],
+    });
+  }
+
+  private announceTourState(): void {
+    if (this.tourActive) {
+      this.setPokemonDialog({
+        speaker: 'TOUR AUTOMÁTICO ATIVADO',
+        badge: 'ROTA COMPLETA • 7 ESTAÇÕES',
+        accentColor: '#2ea86f',
+        caption:
+          'O Gol G5 agora vai visitar todas as 7 estações do portfólio em sequência, parando em cada baia para você assistir aos vídeos! Aperte [V] para curtir o passeio de dentro do cockpit!',
+        tips: ['[V] Cockpit 1ª Pessoa', '[E] Abrir Projeto', '[T / WASD] Parar Tour', '[N] Dicas'],
+      });
+    } else {
+      this.showPokemonTip(this.pokemonTipIndex);
+    }
   }
 
   private cycleCameraMode(): void {
@@ -542,6 +832,35 @@ export class HudController {
     this.cameraMode = mode;
     this.updateCameraModeUi();
     this.callbacks.onToggleCameraMode(mode);
+
+    if (mode === 'firstperson') {
+      this.setPokemonDialog({
+        speaker: 'COCKPIT VW GOL G5 • 1ª PESSOA',
+        badge: 'VISÃO DO MOTORISTA ATIVA',
+        accentColor: '#38bdf8',
+        caption:
+          'Você está dentro do Gol G5! Use [A] e [D] para girar o volante para a esquerda e direita, [W/S] para acelerar, arraste o mouse para olhar o painel e aperte [V] ou [C] para mudar a câmera.',
+        tips: ['[A / D] Virar Volante', '[W / S] Acelerar', '[Mouse] Olhar Painel', '[V] Sair 1ª Pessoa'],
+      });
+    } else if (mode === 'orbit') {
+      this.setPokemonDialog({
+        speaker: 'CÂMERA ÓRBITA 360°',
+        badge: 'INSPEÇÃO DO GOL G5 & MUNDO',
+        accentColor: '#c4a435',
+        caption:
+          'Modo Órbita ativado! Arraste com o botão esquerdo do mouse para girar 360° ao redor do Gol G5 Preto e use o scroll para dar zoom. Pressione [C] para voltar à câmera de direção.',
+        tips: ['[Mouse] Girar 360°', '[Scroll] Zoom', '[C] Voltar 3ª Pessoa', '[WASD] Dirigir'],
+      });
+    } else {
+      this.setPokemonDialog({
+        speaker: 'CÂMERA 3ª PESSOA (CHASE)',
+        badge: 'DIREÇÃO & ENQUADRAMENTO',
+        accentColor: '#2ea86f',
+        caption:
+          'Câmera de perseguição em 3ª pessoa ativa! Ao estacionar perto de um telão, a câmera enquadra automaticamente o Gol G5 ao lado do projeto.',
+        tips: ['[WASD] Dirigir', '[V] Ir para 1ª Pessoa', '[Espaço] Drift', '[E] Abrir Projeto'],
+      });
+    }
   }
 
   private updateCameraModeUi(): void {
@@ -644,11 +963,30 @@ export class HudController {
     this.currentProximityProject = project;
     if (!project) {
       this.proximityBanner.classList.remove('is-visible');
+      this.pokemonOpenBtn.classList.add('is-hidden');
+      if (this.lastNarratedStationId !== null) {
+        this.lastNarratedStationId = null;
+      }
       return;
     }
 
     this.proximityTitleEl.textContent = `${project.title} (${dist.toFixed(1)}m)`;
     this.proximityBanner.classList.add('is-visible');
+    this.pokemonOpenBtn.classList.remove('is-hidden');
+
+    if (this.lastNarratedStationId !== project.id) {
+      this.lastNarratedStationId = project.id;
+      const stationDialog = POKEMON_STATION_DIALOGS[project.id];
+      this.setPokemonDialog({
+        speaker: stationDialog?.speaker ?? `ESTAÇÃO #${project.index} • ${project.shortName.toUpperCase()}`,
+        badge: `${project.category.toUpperCase()} • ${dist.toFixed(1)}M`,
+        accentColor: project.color,
+        caption:
+          stationDialog?.caption ??
+          `Você chegou em ${project.title}! ${project.subtitle}. Olhe para o telão para assistir à demonstração ao vivo ou pressione [E] para abrir os detalhes!`,
+        tips: ['[E] Abrir Simulador', '[Olhar Telão] Roda Vídeo', '[V] Ver do Cockpit', '[N] Ver Dicas'],
+      });
+    }
   }
 
   private worldToMinimap(wx: number, wz: number): { x: number; y: number } {
@@ -1464,6 +1802,14 @@ export class HudController {
 
   public dispose(): void {
     this.cleanupModal();
+    if (this.pokemonTypingTimer !== null) {
+      window.clearInterval(this.pokemonTypingTimer);
+      this.pokemonTypingTimer = null;
+    }
+    if (this.pokemonAutoCycleTimer !== null) {
+      window.clearInterval(this.pokemonAutoCycleTimer);
+      this.pokemonAutoCycleTimer = null;
+    }
     window.removeEventListener('keydown', this.handleKeyDown);
   }
 }

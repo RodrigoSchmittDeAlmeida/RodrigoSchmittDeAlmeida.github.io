@@ -100,7 +100,7 @@ export class SceneManager {
       antialias: true,
       powerPreference: 'high-performance',
     });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
     this.renderer.setSize(width, height);
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -133,13 +133,13 @@ export class SceneManager {
     this.sunLight = new THREE.DirectionalLight(0xfff8ea, 2.05);
     this.sunLight.position.set(16, 26, 14);
     this.sunLight.castShadow = true;
-    this.sunLight.shadow.mapSize.set(2048, 2048);
+    this.sunLight.shadow.mapSize.set(1024, 1024);
     this.sunLight.shadow.camera.near = 1;
-    this.sunLight.shadow.camera.far = 68;
-    this.sunLight.shadow.camera.left = -14;
-    this.sunLight.shadow.camera.right = 14;
-    this.sunLight.shadow.camera.top = 14;
-    this.sunLight.shadow.camera.bottom = -14;
+    this.sunLight.shadow.camera.far = 64;
+    this.sunLight.shadow.camera.left = -12;
+    this.sunLight.shadow.camera.right = 12;
+    this.sunLight.shadow.camera.top = 12;
+    this.sunLight.shadow.camera.bottom = -12;
     this.sunLight.shadow.bias = -0.0003;
     this.sunLight.shadow.normalBias = 0.02;
     this.scene.add(this.sunLight, this.sunLight.target);
@@ -381,6 +381,7 @@ export class SceneManager {
     const height = Math.max(1, this.container.clientHeight);
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
     this.renderer.setSize(width, height);
   }
 

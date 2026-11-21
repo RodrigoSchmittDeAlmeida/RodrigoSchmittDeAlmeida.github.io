@@ -86,13 +86,14 @@ function easeInOutCubic(t: number): number {
 }
 
 /**
- * Renders continuous, video-like application demonstrations onto a 1280x800
- * offscreen canvas for 3D project stations, using real screenshots and
- * authentic domain simulations.
+ * Renders continuous, video-like application demonstrations onto a 960x600
+ * offscreen canvas (scaled cleanly from 1280x800 design space) for 3D project
+ * stations, using real screenshots and authentic domain simulations.
  */
 export class ScreenDemoRenderer {
   public static readonly WIDTH = 1280;
   public static readonly HEIGHT = 800;
+  public static readonly CANVAS_SCALE = 0.75;
 
   private readonly canvas: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
@@ -110,15 +111,15 @@ export class ScreenDemoRenderer {
     this.demoKind = project.demoKind;
 
     this.canvas = document.createElement('canvas');
-    this.canvas.width = ScreenDemoRenderer.WIDTH;
-    this.canvas.height = ScreenDemoRenderer.HEIGHT;
+    this.canvas.width = Math.round(ScreenDemoRenderer.WIDTH * ScreenDemoRenderer.CANVAS_SCALE);
+    this.canvas.height = Math.round(ScreenDemoRenderer.HEIGHT * ScreenDemoRenderer.CANVAS_SCALE);
 
     const ctx = this.canvas.getContext('2d');
     if (!ctx) {
       throw new Error('Failed to acquire 2D context for ScreenDemoRenderer.');
     }
     ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = 'high';
+    ctx.imageSmoothingQuality = 'medium';
     this.ctx = ctx;
 
     this.initSlides();
@@ -174,8 +175,10 @@ export class ScreenDemoRenderer {
     const ctx = this.ctx;
     const w = ScreenDemoRenderer.WIDTH;
     const h = ScreenDemoRenderer.HEIGHT;
+    const s = ScreenDemoRenderer.CANVAS_SCALE;
 
     ctx.save();
+    ctx.setTransform(s, 0, 0, s, 0, 0);
     ctx.clearRect(0, 0, w, h);
 
     switch (this.demoKind) {

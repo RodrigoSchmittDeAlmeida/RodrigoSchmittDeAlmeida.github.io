@@ -120,7 +120,7 @@ export class CarController {
   private steerAngle = 0;
   private rpm = 850;
   private gear = 'N';
-  private headlightsOn = true;
+  private headlightsOn = false;
   private modelLoaded = false;
   private disposed = false;
 
@@ -478,7 +478,7 @@ export class CarController {
           if ((obj as THREE.Mesh).isMesh) {
             const mesh = obj as THREE.Mesh;
             mesh.castShadow = true;
-            mesh.receiveShadow = true;
+            mesh.receiveShadow = false;
             if (Array.isArray(mesh.material)) {
               mesh.material.forEach(registerMaterial);
             } else if (mesh.material) {
@@ -669,6 +669,8 @@ export class CarController {
     const beamIntensity = this.headlightsOn ? 4.5 : 0;
     this.spotLeft.intensity = beamIntensity;
     this.spotRight.intensity = beamIntensity;
+    this.spotLeft.visible = this.headlightsOn;
+    this.spotRight.visible = this.headlightsOn;
 
     for (const mat of this.headlightMats) {
       mat.emissiveIntensity = this.headlightsOn ? 2.2 : 0.12;
@@ -1053,7 +1055,8 @@ export class CarController {
     this.steerPivotFL.rotation.y = this.steerAngle;
     this.steerPivotFR.rotation.y = this.steerAngle;
     if (this.steeringSpinPivot) {
-      this.steeringSpinPivot.rotation.z = -this.steerAngle * 1.8;
+      // Positive steerAngle (Left / KeyA) rotates steering wheel counter-clockwise (+Z) from driver view
+      this.steeringSpinPivot.rotation.z = this.steerAngle * 2.1;
     }
 
     const burnoutFactor =

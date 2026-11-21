@@ -22,6 +22,9 @@ interface VoxelPos {
   x: number;
   y: number;
   z: number;
+  sx?: number;
+  sy?: number;
+  sz?: number;
 }
 
 /**
@@ -811,7 +814,7 @@ export class MinecraftWorld {
       const geo = new THREE.BoxGeometry(0.55, 0.09, len);
       const mesh = new THREE.Mesh(geo, material);
       mesh.position.set(curbX, 0.045, (s0 + s1) * 0.5);
-      mesh.castShadow = true;
+      mesh.castShadow = false;
       mesh.receiveShadow = true;
       this.group.add(mesh);
       this.disposables.push(geo);
@@ -869,28 +872,20 @@ export class MinecraftWorld {
     const hookGeo = new THREE.BoxGeometry(0.1, 0.28, 0.1);
     const lanternGeo = new THREE.BoxGeometry(0.38, 0.44, 0.38);
 
-    const stonePostMat = new THREE.MeshStandardMaterial({
+    const stonePostMat = new THREE.MeshLambertMaterial({
       map: textures.stoneTex,
-      roughness: 0.92,
-      metalness: 0.02,
     });
-    const woodPostMat = new THREE.MeshStandardMaterial({
+    const woodPostMat = new THREE.MeshLambertMaterial({
       map: textures.spruceBark,
-      roughness: 0.94,
-      metalness: 0,
     });
-    const ironHookMat = new THREE.MeshStandardMaterial({
+    const ironHookMat = new THREE.MeshLambertMaterial({
       color: 0x343942,
-      roughness: 0.65,
-      metalness: 0.4,
     });
-    const lanternMat = new THREE.MeshStandardMaterial({
+    const lanternMat = new THREE.MeshLambertMaterial({
       map: textures.lanternTex,
       emissive: new THREE.Color(0xf8e59b),
       emissiveMap: textures.lanternTex,
       emissiveIntensity: 1.25,
-      roughness: 0.55,
-      metalness: 0.1,
     });
 
     this.disposables.push(
@@ -918,9 +913,9 @@ export class MinecraftWorld {
     hookInst.name = 'Minecraft_Lantern_Hooks';
     lanternInst.name = 'Minecraft_Lantern_Cores';
 
-    for (const im of [baseInst, poleInst, armInst, hookInst]) {
-      im.castShadow = true;
-      im.receiveShadow = true;
+    for (const im of [baseInst, poleInst, armInst, hookInst, lanternInst]) {
+      im.castShadow = false;
+      im.receiveShadow = false;
     }
 
     this.tmpScale.set(1, 1, 1);
@@ -1015,7 +1010,7 @@ export class MinecraftWorld {
       const inst = new THREE.InstancedMesh(crossGeo, mat, items.length);
       inst.name = floraConfigs[k].name;
       inst.castShadow = false;
-      inst.receiveShadow = true;
+      inst.receiveShadow = false;
 
       for (let i = 0; i < items.length; i++) {
         const item = items[i];
@@ -1154,13 +1149,20 @@ export class MinecraftWorld {
     const mountainSnowBlocks: VoxelPos[] = [];
 
     // 1. Minecraft 1.21+ Jagged Peaks & Meadows mountain ranges (y = 1..32)
-    // Strictly in |X| >= 46..135, Z <= -242..-305, Z >= +44..+95
+    // Sampled on a 3x3m macro-voxel grid with solid vertical pillars so 70,985 cubes
+    // compress into ~5,200 single-draw-call Lambert instances for locked 60 FPS!
+    const STEP = 3;
     const terrainHeightMap = new Map<string, number>();
 
-    for (let bz = -305; bz <= 95; bz++) {
-      for (let bx = -135; bx <= 135; bx++) {
+    const snapGrid = (val: number): number => Math.round(val / STEP) * STEP;
+    const sampleTerrainHeight = (qx: number, qz: number): number => {
+      return terrainHeightMap.get(`${snapGrid(qx)},${snapGrid(qz)}`) ?? 0;
+    };
+
+    for (let bz = -303; bz <= 93; bz += STEP) {
+      for (let bx = -132; bx <= 132; bx += STEP) {
         if (Math.abs(bx) < 46 && bz > -242 && bz < 44) continue;
-        if (!this.isAllowedBackgroundCoord(bx, bz, 0)) continue;
+        if (!this.isAllowedBackgroundCoord(bx, bz, 2)) continue;
 
         const dxCorr = Math.max(0, Math.abs(bx) - 46);
         const dzNorth = Math.max(0, -242 - bz);
@@ -1200,59 +1202,74 @@ export class MinecraftWorld {
           (distFromCorridor < 12 ? massifWeight * 3.0 : 0);
 
         const topY = Math.min(32, Math.floor(rawH));
-        if (topY >= 1) {
+        if (topY >= 2) {
           terrainHeightMap.set(`${bx},${bz}`, topY);
         }
       }
     }
 
-    // Surface-shell culling + geological stratification (Deepslate -> Stone -> Dirt/Grass -> Snow)
+    // Geological stratification with vertical column merging (max 2 instances per 3x3 column)
     for (const [key, topY] of terrainHeightMap.entries()) {
       const commaIdx = key.indexOf(',');
       const bx = Number(key.slice(0, commaIdx));
       const bz = Number(key.slice(commaIdx + 1));
 
-      const hN = terrainHeightMap.get(`${bx},${bz - 1}`) ?? 0;
-      const hS = terrainHeightMap.get(`${bx},${bz + 1}`) ?? 0;
-      const hW = terrainHeightMap.get(`${bx - 1},${bz}`) ?? 0;
-      const hE = terrainHeightMap.get(`${bx + 1},${bz}`) ?? 0;
+      const hN = terrainHeightMap.get(`${bx},${bz - STEP}`) ?? 0;
+      const hS = terrainHeightMap.get(`${bx},${bz + STEP}`) ?? 0;
+      const hW = terrainHeightMap.get(`${bx - STEP},${bz}`) ?? 0;
+      const hE = terrainHeightMap.get(`${bx + STEP},${bz}`) ?? 0;
       const minNeighborY = Math.min(hN, hS, hW, hE);
       const slope = topY - minNeighborY;
 
-      const startY = Math.min(topY - 1, minNeighborY);
-      for (let y = startY; y < topY; y++) {
-        const blockHeight = y + 1;
-        const pos: VoxelPos = { x: bx, y: y + 0.5, z: bz };
+      const capH = topY >= 16 ? Math.min(4, Math.max(2, Math.round(topY * 0.22))) : 2;
+      const baseH = Math.max(0, topY - capH);
 
-        if (y === topY - 1) {
-          if (topY >= 16 || (topY === 15 && slope <= 1 && this.hash2D(bx, bz) < 0.55)) {
-            mountainSnowBlocks.push(pos);
-          } else if (slope >= 4 && topY <= 11) {
-            mountainDeepslateBlocks.push(pos);
-          } else if (topY >= 12 || slope >= 3) {
-            mountainStoneBlocks.push(pos);
-          } else {
-            mountainGrassBlocks.push(pos);
-          }
+      // Lower cliff pillar (Deepslate / Stone / Dirt)
+      if (baseH > 0) {
+        const basePillar: VoxelPos = {
+          x: bx,
+          y: baseH * 0.5,
+          z: bz,
+          sx: STEP,
+          sy: baseH,
+          sz: STEP,
+        };
+        if (topY <= 9 && slope >= 4) {
+          mountainDeepslateBlocks.push(basePillar);
+        } else if (topY < 11 && slope < 3) {
+          mountainDirtBlocks.push(basePillar);
+        } else if (this.hash2D(bx, bz) < 0.32) {
+          mountainDeepslateBlocks.push(basePillar);
         } else {
-          if (topY >= 16 && blockHeight >= topY - 1 && blockHeight >= 16) {
-            mountainSnowBlocks.push(pos);
-          } else if (blockHeight <= 5 || (blockHeight <= 9 && slope >= 3)) {
-            mountainDeepslateBlocks.push(pos);
-          } else if (topY < 12 && slope < 3 && y >= topY - 3) {
-            mountainDirtBlocks.push(pos);
-          } else {
-            mountainStoneBlocks.push(pos);
-          }
+          mountainStoneBlocks.push(basePillar);
         }
+      }
+
+      // Upper cap block (Snow Peak / Stone Cliff / Meadow Grass)
+      const capBlock: VoxelPos = {
+        x: bx,
+        y: baseH + capH * 0.5,
+        z: bz,
+        sx: STEP,
+        sy: capH,
+        sz: STEP,
+      };
+      if (topY >= 16 || (topY === 15 && slope <= 2 && this.hash2D(bx, bz) < 0.55)) {
+        mountainSnowBlocks.push(capBlock);
+      } else if (slope >= 6 && topY <= 12) {
+        mountainDeepslateBlocks.push(capBlock);
+      } else if (topY >= 12 || slope >= 5) {
+        mountainStoneBlocks.push(capBlock);
+      } else {
+        mountainGrassBlocks.push(capBlock);
       }
     }
 
     // 2. Distant Spruce (conical pine), Oak & Birch voxel trees (strictly outside |X| < 38 && Z in (-236, 36))
     const treePositions: Array<{ x: number; z: number; kind: 'oak' | 'birch' | 'spruce' }> = [];
-    const minTreeSpacing = 6.2;
+    const minTreeSpacing = 7.6;
 
-    for (let attempt = 0; attempt < 1100 && treePositions.length < 185; attempt++) {
+    for (let attempt = 0; attempt < 900 && treePositions.length < 95; attempt++) {
       const tx = Math.round(-126 + rng() * 252);
       const tz = Math.round(-295 + rng() * 380);
 
@@ -1260,7 +1277,7 @@ export class MinecraftWorld {
       if (!this.isAllowedBackgroundCoord(tx, tz, 2.5)) continue;
 
       // Grow forest on grassy meadows & foothills, never on high snow/stone cliffs
-      const baseH = terrainHeightMap.get(`${tx},${tz}`) ?? 0;
+      const baseH = sampleTerrainHeight(tx, tz);
       if (baseH > 10) continue;
 
       let tooClose = false;
@@ -1279,17 +1296,19 @@ export class MinecraftWorld {
     }
 
     for (const tree of treePositions) {
-      const baseH = terrainHeightMap.get(`${tree.x},${tree.z}`) ?? 0;
+      const baseH = sampleTerrainHeight(tree.x, tree.z);
 
       if (tree.kind === 'spruce') {
-        const trunkHeight = 6 + Math.floor(rng() * 4);
-        for (let ty = 0; ty < trunkHeight; ty++) {
-          spruceTrunkBlocks.push({
-            x: tree.x,
-            y: baseH + ty + 0.5,
-            z: tree.z,
-          });
-        }
+        const trunkHeight = 6 + Math.floor(rng() * 3);
+        // Single merged vertical trunk column per tree
+        spruceTrunkBlocks.push({
+          x: tree.x,
+          y: baseH + trunkHeight * 0.5,
+          z: tree.z,
+          sx: 1,
+          sy: trunkHeight,
+          sz: 1,
+        });
 
         // Conical layered Spruce foliage tapering from wide skirt up to single tip
         const topTipY = baseH + trunkHeight + 1;
@@ -1330,13 +1349,14 @@ export class MinecraftWorld {
       const trunkTarget = isBirch ? birchTrunkBlocks : oakTrunkBlocks;
       const leafTarget = isBirch ? birchLeafBlocks : oakLeafBlocks;
 
-      for (let ty = 0; ty < trunkHeight; ty++) {
-        trunkTarget.push({
-          x: tree.x,
-          y: baseH + ty + 0.5,
-          z: tree.z,
-        });
-      }
+      trunkTarget.push({
+        x: tree.x,
+        y: baseH + trunkHeight * 0.5,
+        z: tree.z,
+        sx: 1,
+        sy: trunkHeight,
+        sz: 1,
+      });
 
       // Classic Minecraft canopy: 2 lower 5x5 chamfered layers + 3x3 layer + top cross
       const crownBase = baseH + trunkHeight - 1;
@@ -1367,102 +1387,51 @@ export class MinecraftWorld {
       }
     }
 
-    // Build shared 1x1x1 voxel geometry & separate InstancedMeshes for 60 FPS
+    // Build shared 1x1x1 voxel geometry & single-material Lambert InstancedMeshes for 60 FPS
     const voxelGeo = new THREE.BoxGeometry(1, 1, 1);
     this.disposables.push(voxelGeo);
 
-    // Grass Block (side = grassSide, top = grassTopBlock, bottom = dirtTex)
-    const grassBlockMats = [
-      new THREE.MeshStandardMaterial({ map: textures.grassSide, roughness: 0.96, metalness: 0 }),
-      new THREE.MeshStandardMaterial({ map: textures.grassSide, roughness: 0.96, metalness: 0 }),
-      new THREE.MeshStandardMaterial({ map: textures.grassTopBlock, roughness: 0.96, metalness: 0 }),
-      new THREE.MeshStandardMaterial({ map: textures.dirtTex, roughness: 0.96, metalness: 0 }),
-      new THREE.MeshStandardMaterial({ map: textures.grassSide, roughness: 0.96, metalness: 0 }),
-      new THREE.MeshStandardMaterial({ map: textures.grassSide, roughness: 0.96, metalness: 0 }),
-    ];
-    this.disposables.push(...grassBlockMats);
-    this.spawnInstancedVoxels('Mountain_Grass_Blocks', voxelGeo, grassBlockMats, mountainGrassBlocks, false);
+    const grassMat = new THREE.MeshLambertMaterial({ map: textures.grassTopBlock });
+    const dirtMat = new THREE.MeshLambertMaterial({ map: textures.dirtTex });
+    const stoneMat = new THREE.MeshLambertMaterial({ map: textures.stoneTex });
+    const deepslateMat = new THREE.MeshLambertMaterial({ map: textures.deepslateTex });
+    const snowMat = new THREE.MeshLambertMaterial({ map: textures.snowTex });
 
-    const dirtMat = new THREE.MeshStandardMaterial({
-      map: textures.dirtTex,
-      roughness: 0.96,
-      metalness: 0,
-    });
-    const stoneMat = new THREE.MeshStandardMaterial({
-      map: textures.stoneTex,
-      roughness: 0.94,
-      metalness: 0.02,
-    });
-    const deepslateMat = new THREE.MeshStandardMaterial({
-      map: textures.deepslateTex,
-      roughness: 0.95,
-      metalness: 0.02,
-    });
-    const snowMat = new THREE.MeshStandardMaterial({
-      map: textures.snowTex,
-      roughness: 0.9,
-      metalness: 0,
-    });
-    this.disposables.push(dirtMat, stoneMat, deepslateMat, snowMat);
+    const oakTrunkMat = new THREE.MeshLambertMaterial({ map: textures.oakBark });
+    const birchTrunkMat = new THREE.MeshLambertMaterial({ map: textures.birchBark });
+    const spruceTrunkMat = new THREE.MeshLambertMaterial({ map: textures.spruceBark });
 
+    const oakLeafMat = new THREE.MeshLambertMaterial({ map: textures.oakLeaves });
+    const birchLeafMat = new THREE.MeshLambertMaterial({ map: textures.birchLeaves });
+    const spruceLeafMat = new THREE.MeshLambertMaterial({ map: textures.spruceLeaves });
+
+    this.disposables.push(
+      grassMat,
+      dirtMat,
+      stoneMat,
+      deepslateMat,
+      snowMat,
+      oakTrunkMat,
+      birchTrunkMat,
+      spruceTrunkMat,
+      oakLeafMat,
+      birchLeafMat,
+      spruceLeafMat,
+    );
+
+    this.spawnInstancedVoxels('Mountain_Grass_Blocks', voxelGeo, grassMat, mountainGrassBlocks, false);
     this.spawnInstancedVoxels('Mountain_Dirt_Blocks', voxelGeo, dirtMat, mountainDirtBlocks, false);
     this.spawnInstancedVoxels('Mountain_Stone_Blocks', voxelGeo, stoneMat, mountainStoneBlocks, false);
     this.spawnInstancedVoxels('Mountain_Deepslate_Blocks', voxelGeo, deepslateMat, mountainDeepslateBlocks, false);
     this.spawnInstancedVoxels('Mountain_Snow_Blocks', voxelGeo, snowMat, mountainSnowBlocks, false);
 
-    const oakTrunkMats = [
-      new THREE.MeshStandardMaterial({ map: textures.oakBark, roughness: 0.94, metalness: 0 }),
-      new THREE.MeshStandardMaterial({ map: textures.oakBark, roughness: 0.94, metalness: 0 }),
-      new THREE.MeshStandardMaterial({ map: textures.oakTop, roughness: 0.94, metalness: 0 }),
-      new THREE.MeshStandardMaterial({ map: textures.oakTop, roughness: 0.94, metalness: 0 }),
-      new THREE.MeshStandardMaterial({ map: textures.oakBark, roughness: 0.94, metalness: 0 }),
-      new THREE.MeshStandardMaterial({ map: textures.oakBark, roughness: 0.94, metalness: 0 }),
-    ];
-    this.disposables.push(...oakTrunkMats);
-    this.spawnInstancedVoxels('Oak_Trunks', voxelGeo, oakTrunkMats, oakTrunkBlocks, true);
+    this.spawnInstancedVoxels('Oak_Trunks', voxelGeo, oakTrunkMat, oakTrunkBlocks, false);
+    this.spawnInstancedVoxels('Birch_Trunks', voxelGeo, birchTrunkMat, birchTrunkBlocks, false);
+    this.spawnInstancedVoxels('Spruce_Trunks', voxelGeo, spruceTrunkMat, spruceTrunkBlocks, false);
 
-    const birchTrunkMats = [
-      new THREE.MeshStandardMaterial({ map: textures.birchBark, roughness: 0.92, metalness: 0 }),
-      new THREE.MeshStandardMaterial({ map: textures.birchBark, roughness: 0.92, metalness: 0 }),
-      new THREE.MeshStandardMaterial({ map: textures.birchTop, roughness: 0.92, metalness: 0 }),
-      new THREE.MeshStandardMaterial({ map: textures.birchTop, roughness: 0.92, metalness: 0 }),
-      new THREE.MeshStandardMaterial({ map: textures.birchBark, roughness: 0.92, metalness: 0 }),
-      new THREE.MeshStandardMaterial({ map: textures.birchBark, roughness: 0.92, metalness: 0 }),
-    ];
-    this.disposables.push(...birchTrunkMats);
-    this.spawnInstancedVoxels('Birch_Trunks', voxelGeo, birchTrunkMats, birchTrunkBlocks, true);
-
-    const spruceTrunkMats = [
-      new THREE.MeshStandardMaterial({ map: textures.spruceBark, roughness: 0.94, metalness: 0 }),
-      new THREE.MeshStandardMaterial({ map: textures.spruceBark, roughness: 0.94, metalness: 0 }),
-      new THREE.MeshStandardMaterial({ map: textures.spruceTop, roughness: 0.94, metalness: 0 }),
-      new THREE.MeshStandardMaterial({ map: textures.spruceTop, roughness: 0.94, metalness: 0 }),
-      new THREE.MeshStandardMaterial({ map: textures.spruceBark, roughness: 0.94, metalness: 0 }),
-      new THREE.MeshStandardMaterial({ map: textures.spruceBark, roughness: 0.94, metalness: 0 }),
-    ];
-    this.disposables.push(...spruceTrunkMats);
-    this.spawnInstancedVoxels('Spruce_Trunks', voxelGeo, spruceTrunkMats, spruceTrunkBlocks, true);
-
-    const oakLeafMat = new THREE.MeshStandardMaterial({
-      map: textures.oakLeaves,
-      roughness: 0.95,
-      metalness: 0,
-    });
-    const birchLeafMat = new THREE.MeshStandardMaterial({
-      map: textures.birchLeaves,
-      roughness: 0.95,
-      metalness: 0,
-    });
-    const spruceLeafMat = new THREE.MeshStandardMaterial({
-      map: textures.spruceLeaves,
-      roughness: 0.95,
-      metalness: 0,
-    });
-    this.disposables.push(oakLeafMat, birchLeafMat, spruceLeafMat);
-
-    this.spawnInstancedVoxels('Oak_Leaves', voxelGeo, oakLeafMat, oakLeafBlocks, true);
-    this.spawnInstancedVoxels('Birch_Leaves', voxelGeo, birchLeafMat, birchLeafBlocks, true);
-    this.spawnInstancedVoxels('Spruce_Leaves', voxelGeo, spruceLeafMat, spruceLeafBlocks, true);
+    this.spawnInstancedVoxels('Oak_Leaves', voxelGeo, oakLeafMat, oakLeafBlocks, false);
+    this.spawnInstancedVoxels('Birch_Leaves', voxelGeo, birchLeafMat, birchLeafBlocks, false);
+    this.spawnInstancedVoxels('Spruce_Leaves', voxelGeo, spruceLeafMat, spruceLeafBlocks, false);
   }
 
   private spawnInstancedVoxels(
@@ -1477,9 +1446,8 @@ export class MinecraftWorld {
     const mesh = new THREE.InstancedMesh(geometry, material, positions.length);
     mesh.name = name;
     mesh.castShadow = castShadow;
-    mesh.receiveShadow = true;
+    mesh.receiveShadow = false;
 
-    this.tmpScale.set(1, 1, 1);
     for (let i = 0; i < positions.length; i++) {
       const p = positions[i];
       // Hard invariant assert: zero blocks in central driving zone
@@ -1487,6 +1455,7 @@ export class MinecraftWorld {
         throw new Error(`MinecraftWorld invariant violated at (${p.x}, ${p.z})`);
       }
       this.tmpPos.set(p.x, p.y, p.z);
+      this.tmpScale.set(p.sx ?? 1, p.sy ?? 1, p.sz ?? 1);
       this.tmpMatrix.compose(this.tmpPos, this.tmpQuat, this.tmpScale);
       mesh.setMatrixAt(i, this.tmpMatrix);
     }
