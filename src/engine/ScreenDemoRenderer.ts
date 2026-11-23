@@ -10,10 +10,10 @@ interface LoadedSlide {
 
 const DEFAULT_SCREENS: Record<DemoKind, Array<{ src: string; label: string }>> = {
   leitorECU: [
-    { src: './screens/leitorecu/01-telemetry.png', label: 'Telemetria 30 FPS — Osciloscópio Triplo' },
-    { src: './screens/leitorecu/02-map2d.png', label: 'Mapa 2D (RPM × MAP) — Avanço & Ignição' },
-    { src: './screens/leitorecu/03-modules.png', label: 'Módulos & Diagnóstico — KWP2000 / UDS' },
-    { src: './screens/leitorecu/04-fordka.png', label: 'Perfil Multi-Veículo — Ford HS-CAN' },
+    { src: './screens/leitorecu/03-desktop-telemetry.png', label: 'Desktop 30 FPS — Osciloscópio Triplo & Mapa 2D' },
+    { src: './screens/leitorecu/04-desktop-modules.png', label: 'Desktop — Módulos CAN (Motor / ABS / BCM / Painel)' },
+    { src: './screens/leitorecu/05-mobile-phone.png', label: 'Mobile Smartphone — Painel & Gravação Rápida' },
+    { src: './screens/leitorecu/06-mobile-tablet.png', label: 'Tablet Paisagem — Telemetria Responsiva' },
   ],
   vstable: [
     { src: './screens/vstable/01-login.png', label: '1/7 • Autenticação Corporativa' },
@@ -127,11 +127,18 @@ export class ScreenDemoRenderer {
 
   private initSlides(): void {
     const defaults = DEFAULT_SCREENS[this.demoKind] ?? [];
+    const staticScreenshots =
+      this.demoKind === 'leitorECU'
+        ? (this.project.screenshots ?? []).filter((src) => !src.toLowerCase().endsWith('.gif'))
+        : (this.project.screenshots ?? []);
     const sources: Array<{ src: string; label: string }> =
-      this.project.screenshots && this.project.screenshots.length > 0
-        ? this.project.screenshots.map((src, idx) => ({
+      staticScreenshots.length > 0
+        ? staticScreenshots.map((src, idx) => ({
             src,
-            label: defaults[idx]?.label ?? `${this.project.shortName} • Tela ${idx + 1}`,
+            label:
+              defaults.find((d) => d.src === src)?.label ??
+              defaults[idx]?.label ??
+              `${this.project.shortName} • Tela ${idx + 1}`,
           }))
         : defaults;
 
@@ -341,7 +348,7 @@ export class ScreenDemoRenderer {
     ctx.lineWidth = 2.4;
     ctx.stroke();
 
-    // Center: KWP2000 Blocks 032 / 033 / 103
+    // Center: Generic multi-protocol telemetry readout
     const kwpX = 498;
     const kwpW = 430;
     this.roundRect(kwpX, scopeY, kwpW, scopeH, 8, '#0b0e14', '#26303d');
@@ -349,29 +356,26 @@ export class ScreenDemoRenderer {
     ctx.fillStyle = '#94a3b8';
     ctx.font = '600 13px "IBM Plex Mono", monospace';
     ctx.textAlign = 'left';
-    ctx.fillText('KWP2000 • 032906032AJ • BLOCOS 032/033/103', kwpX + 14, scopeY + 22);
+    ctx.fillText('MULTI-PROTOCOLO • CAN UDS / KWP2000 / OBD-II', kwpX + 14, scopeY + 22);
 
-    // Block 103.5 ethanol adaptation transitions 99.6% -> 68.4% smoothly over 10s cycle
-    const resetPhase = (t % 10) / 10;
-    const blend = resetPhase < 0.35 ? 0 : resetPhase < 0.65 ? easeInOutCubic((resetPhase - 0.35) / 0.3) : 1;
-    const b103 = lerp(99.6, 68.4, blend);
-    const b032 = lerp(-18.75, -3.1, blend);
-    const b033 = 1.4 + Math.sin(t * 2.1) * 1.9;
+    const advDeg = 14.5 + Math.sin(t * 1.1) * 9.5;
+    const ltftPct = 1.8 + Math.sin(t * 0.35) * 0.8;
+    const stftPct = Math.sin(t * 2.1) * 3.2;
 
     const cells = [
-      { label: 'BLOCO 103.5 (ETANOL)', value: `${b103.toFixed(1)}%`, warn: b103 > 90 },
-      { label: 'BLOCO 032 (LTFT)', value: `${b032.toFixed(2)}%`, warn: b032 < -12 },
-      { label: 'BLOCO 033 (STFT)', value: `${b033 >= 0 ? '+' : ''}${b033.toFixed(1)}%`, warn: false },
+      { label: 'AVANÇO IGNIÇÃO', value: `${advDeg.toFixed(1)}°`, color: '#b86bff' },
+      { label: 'LTFT (TRIMS)', value: `${ltftPct >= 0 ? '+' : ''}${ltftPct.toFixed(1)}%`, color: '#fbbf24' },
+      { label: 'STFT (SONDA)', value: `${stftPct >= 0 ? '+' : ''}${stftPct.toFixed(1)}%`, color: '#34d399' },
     ];
 
     cells.forEach((cell, cIdx) => {
       const cx = kwpX + 14 + cIdx * 136;
       const cy = scopeY + 36;
-      this.roundRect(cx, cy, 128, 86, 6, '#141a24', cell.warn ? this.accentColor : '#26303d');
+      this.roundRect(cx, cy, 128, 86, 6, '#141a24', '#26303d');
       ctx.fillStyle = '#94a3b8';
       ctx.font = '600 11px "IBM Plex Sans", sans-serif';
       ctx.fillText(cell.label, cx + 10, cy + 24);
-      ctx.fillStyle = cell.warn ? '#f87171' : '#38bdf8';
+      ctx.fillStyle = cell.color;
       ctx.font = '700 22px "IBM Plex Mono", monospace';
       ctx.fillText(cell.value, cx + 10, cy + 62);
     });

@@ -35,10 +35,12 @@ const CHAT_WELCOME_MESSAGE: ChatMessage = {
 };
 
 const SCREENSHOT_CAPTIONS: Record<string, string> = {
-  '01-telemetry.png': 'Telemetria em 30 FPS — Blocos Bosch ME7.5.30',
-  '02-map2d.png': 'Mapa 2D — Carga × RPM × Avanço',
-  '03-modules.png': 'Módulos SOLID & Protocolos KWP2000 / UDS',
-  '04-fordka.png': 'Perfil Multi-Veículo — Ford HS-CAN UDS',
+  '01-demo-desktop.gif': 'Demo Ao Vivo (Desktop) — Osciloscópio Triplo, Mapa 2D & Módulos CAN',
+  '02-demo-mobile.gif': 'Demo Ao Vivo (Mobile & Tablet) — Gráficos Separados, Mapa 2D & Logs',
+  '03-desktop-telemetry.png': 'Desktop 30 FPS — Telemetria Turbo, Peak Hold & Mapa 2D 250 kPa',
+  '04-desktop-modules.png': 'Desktop — Diagnóstico Multimodular CAN (Motor, Carroceria, Freios, Painel)',
+  '05-mobile-phone.png': 'Smartphone (Android) — Painel Focado em Dados & Gravação Rápida',
+  '06-mobile-tablet.png': 'Tablet (Paisagem) — Layout Responsivo com NavigationRail',
   '01-login.png': 'Autenticação Corporativa B2B',
   '02-transfer-dados.png': 'Transferência Internacional — Dados & Cotação',
   '03-transfer-revisao.png': 'Revisão Transparente de Taxas & IOF',
@@ -103,9 +105,9 @@ const POKEMON_GAMEPLAY_TIPS: PokemonDialogEntry[] = [
 
 const POKEMON_STATION_DIALOGS: Record<string, { speaker: string; caption: string }> = {
   leitorECU: {
-    speaker: 'ESTAÇÃO #1 • LEITORECU (GOL G5)',
+    speaker: 'ESTAÇÃO #1 • LEITORECU',
     caption:
-      'Você chegou ao leitorECU! Este datalogger automotivo lê a injeção Bosch ME7.5.30 do Gol G5 via KWP2000/OBD2 a 30 FPS. Olhe para o telão para ver o vídeo da telemetria ou aperte [E] para abrir!',
+      'Você chegou ao leitorECU! Suite Desktop (30 FPS) e Mobile/Tablet (Flutter) com leitura ao vivo via BLE/Wi-Fi/USB, osciloscópio triplo, Mapa 2D e gravação/exportação de logs CSV e .msl. Olhe para o telão ou aperte [E] para ver as demos e capturas!',
   },
   vstable: {
     speaker: 'ESTAÇÃO #2 • V-STABLE FINTECH',
@@ -1380,7 +1382,8 @@ export class HudController {
 
     let currentIdx = 0;
     let progress = 0;
-    const SLIDE_DURATION_MS = 3800;
+    const getSlideDurationMs = (url: string): number =>
+      url.toLowerCase().endsWith('.gif') ? 9500 : 4200;
 
     const dotsHtml = slides
       .map(
@@ -1458,10 +1461,11 @@ export class HudController {
       const dt = Math.min(100, now - lastTime);
       lastTime = now;
       progress += dt;
-      if (progress >= SLIDE_DURATION_MS) {
+      const slideDuration = getSlideDurationMs(slides[currentIdx].url);
+      if (progress >= slideDuration) {
         showSlide(currentIdx + 1);
       } else {
-        progressEl.style.width = `${((progress / SLIDE_DURATION_MS) * 100).toFixed(1)}%`;
+        progressEl.style.width = `${((progress / slideDuration) * 100).toFixed(1)}%`;
       }
     };
 
